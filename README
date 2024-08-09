@@ -1,0 +1,4 @@
+### How to push a package:
+```
+curl -X POST --data-binary @hello_2.10-2_amd64.deb http://localhost:3000/v1/packages/upload/hello_2.10-2_amd64.deb
+```
