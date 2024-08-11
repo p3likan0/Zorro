@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Request},
     body::Bytes,
     http::StatusCode,
+    response::Json,
     BoxError,
 };
 use serde::{Deserialize, Serialize};
@@ -72,4 +73,9 @@ fn path_is_valid(path: &str) -> bool {
     }
 
     components.count() == 1
+}
+
+pub async fn get_packages() -> Json<Package> {
+    let p = Package{name: "python3".to_string(), version: "1.2.3".to_string(), hash: "aoaeuaoue".to_string()};
+    Json(p)
 }
