@@ -19,7 +19,7 @@ async fn main() {
 
     let app = Router::new().route("/v1/packages", get(package::get_packages))
                            .route("/v1/packages/upload/:package_name", post(package::upload_package))
-                           .route("/v1/repository", get(repository::handle_get_repository)).with_state(shared_archive);
+                           .route("/v1/repositories", get(repository::handle_get_repositories)).with_state(shared_archive);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
