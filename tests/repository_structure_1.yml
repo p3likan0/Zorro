@@ -1,0 +1,9 @@
+---
+dists:
+  stable:
+    main:
+      architectures: ["arm64","amd64"]
+    contrib:
+      architectures: ["amd64"]
+    testing: 
+      architectures: ["arm64"]

@@ -5,6 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "zorro"
+path = "src/main.rs"
+
+[lib]
+name = "zorro_lib"
+path = "src/lib.rs"
+
 [dependencies]
 axum = "0.7.5"
 tokio = { version = "1", features = ["full"] }
@@ -13,3 +21,7 @@ serde = { version = "1", features = ["derive"] }
 futures = "0.3"
 tokio-util = { version = "0", features = ["full"] }
 serde_yaml = "0"
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0"
