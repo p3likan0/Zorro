@@ -1,9 +1,16 @@
 ---
 dists:
   stable:
-    main:
-      architectures: ["arm64","amd64"]
-    contrib:
-      architectures: ["amd64"]
-    testing: 
-      architectures: ["arm64"]
+    origin: "origin"
+    label: "label"
+    version: "version"
+    codename: "codename"
+    suites: ["main", "contrib", "testing"]
+    architectures: ["arm64","amd64"]
+  unstable:
+    origin: "origin"
+    label: "label"
+    version: "version"
+    codename: "codename"
+    suites: ["main", "contrib", "testing"]
+    architectures: ["arm64","amd64"]

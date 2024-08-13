@@ -12,22 +12,32 @@ use axum::{
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct DebianArchive {
-    dists: HashMap<String, HashMap<String, Section>>
+pub struct RepositoryConfig {
+    pub dists: HashMap<String, Distribution>
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct Section {
-    #[serde(flatten)]
-    architectures: HashMap<String, Vec<String>>,
+pub struct Distribution {
+    pub origin: String,
+    pub label: String,
+    pub version: String,
+    pub codename: String,
+    pub suites: Vec<String>,
+    pub architectures: Vec<String>,
 }
 
-impl DebianArchive{
+impl RepositoryConfig{
     pub fn new(config_path: &str) -> Self{
         let yaml_content = read_to_string(config_path)
             .unwrap_or_else(|_| panic!("Cannot read config: {}", config_path));
-        let archive: DebianArchive = serde_yaml::from_str(&yaml_content)
+        println!("yaml: {}",yaml_content);
+        let archive: RepositoryConfig = serde_yaml::from_str(&yaml_content)
             .unwrap_or_else(|_| panic!("Cannot parse yaml: {}", config_path));
+        //let archive: Result<RepositoryConfig, serde_yaml::Error> = serde_yaml::from_str(&yaml_content);
+        //match archive {
+        //    Ok(value) => return value,
+        //    Err(e) => panic!("Failed to parse as Value: {:?}", e),
+        //}
         archive
     }
 
@@ -37,7 +47,7 @@ impl DebianArchive{
 }
 
 pub async fn handle_get_repositories(
-    State(shared_object): State<Arc<DebianArchive>>,
+    State(shared_object): State<Arc<RepositoryConfig>>,
 ) -> impl IntoResponse {
     Json(shared_object.as_ref().clone())
 }

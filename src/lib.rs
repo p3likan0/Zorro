@@ -6,6 +6,7 @@ use axum::{
 
 mod package;
 mod repository;
+//mod release;
 
 use std::sync::Arc;
 
@@ -21,7 +22,21 @@ pub async fn run_server(base_url: &str) {
 }
 
 fn app(config_path: &str) -> Router {
-    let archive = repository::DebianArchive::new(config_path);
+    let archive = repository::RepositoryConfig::new(config_path);
+    //for (suite_name, suite) in &archive.dists {
+    //    println!("  Suite Name: {}", suite_name);
+    //    println!("  Architectures: {:?}", suite.architectures);
+    //}
+
+    //let release = release::DebianRelease::new(
+    //    archive.dists[0].to_string(),
+    //    "main".to_string(),
+    //    "YourOrganization".to_string(),
+    //    "YourRepository".to_string(),
+    //    vec!["amd64".to_string(), "armhf".to_string()],
+    //    "Sample repository".to_string(),
+    //);
+
 
     let shared_archive = Arc::new(archive); 
 
@@ -67,19 +82,39 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&body).unwrap();
+        println!("{:#}", body);
         let expected_json = json!({
             "dists": {
-                "stable": {
-                    "contrib": {
-                        "architectures": ["amd64"]
-                    },
-                    "main": {
-                        "architectures": ["arm64", "amd64"]
-                    },
-                    "testing": {
-                        "architectures": ["arm64"]
-                    }
-                }
+              "stable": {
+                "architectures": [
+                  "arm64",
+                  "amd64"
+                ],
+                "codename": "codename",
+                "label": "label",
+                "origin": "origin",
+                "suites": [
+                  "main",
+                  "contrib",
+                  "testing"
+                ],
+                "version": "version"
+              },
+              "unstable": {
+                "architectures": [
+                  "arm64",
+                  "amd64"
+                ],
+                "codename": "codename",
+                "label": "label",
+                "origin": "origin",
+                "suites": [
+                  "main",
+                  "contrib",
+                  "testing"
+                ],
+                "version": "version"
+              }
             }
         });
         assert_eq!(body, expected_json);
