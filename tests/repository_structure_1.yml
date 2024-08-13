@@ -5,12 +5,14 @@ dists:
     label: "label"
     version: "version"
     codename: "codename"
-    suites: ["main", "contrib", "testing"]
+    description: "this is a distribution description"
+    components: ["main", "contrib", "testing"]
     architectures: ["arm64","amd64"]
   unstable:
     origin: "origin"
     label: "label"
     version: "version"
     codename: "codename"
-    suites: ["main", "contrib", "testing"]
+    description: "this is a distribution description"
+    components: ["main", "contrib", "testing"]
     architectures: ["arm64","amd64"]

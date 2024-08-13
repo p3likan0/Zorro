@@ -22,7 +22,8 @@ pub struct Distribution {
     pub label: String,
     pub version: String,
     pub codename: String,
-    pub suites: Vec<String>,
+    pub description: String,
+    pub components: Vec<String>,
     pub architectures: Vec<String>,
 }
 

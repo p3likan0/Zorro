@@ -6,11 +6,12 @@ use axum::{
 
 mod package;
 mod repository;
-//mod release;
+mod release;
 
 use std::sync::Arc;
 
 const CONFIG_PATH: &str = ".config/repository_structure.yaml";
+const PUBLISH_PATH: &str = "/tmp/publish";
 
 pub async fn run_server(base_url: &str) {
     package::create_uploads_directory().await.expect("Could not create uploads directory"); // Not tested yet
@@ -23,19 +24,19 @@ pub async fn run_server(base_url: &str) {
 
 fn app(config_path: &str) -> Router {
     let archive = repository::RepositoryConfig::new(config_path);
-    //for (suite_name, suite) in &archive.dists {
-    //    println!("  Suite Name: {}", suite_name);
-    //    println!("  Architectures: {:?}", suite.architectures);
-    //}
-
-    //let release = release::DebianRelease::new(
-    //    archive.dists[0].to_string(),
-    //    "main".to_string(),
-    //    "YourOrganization".to_string(),
-    //    "YourRepository".to_string(),
-    //    vec!["amd64".to_string(), "armhf".to_string()],
-    //    "Sample repository".to_string(),
-    //);
+    for (suite, distribution) in &archive.dists {
+        let release = release::DebianRelease::new(
+            suite.to_string(),
+            distribution.components.clone(),
+            distribution.version.to_string(),
+            distribution.origin.to_string(),
+            distribution.label.to_string(),
+            distribution.architectures.clone(),
+            distribution.description.to_string(),
+            distribution.codename.to_string(),
+            );
+        release.save_to_file(PUBLISH_PATH).expect("could not save to file");
+    }
 
 
     let shared_archive = Arc::new(archive); 
@@ -91,9 +92,10 @@ mod tests {
                   "amd64"
                 ],
                 "codename": "codename",
+                "description": "this is a distribution description",
                 "label": "label",
                 "origin": "origin",
-                "suites": [
+                "components": [
                   "main",
                   "contrib",
                   "testing"
@@ -106,9 +108,10 @@ mod tests {
                   "amd64"
                 ],
                 "codename": "codename",
+                "description": "this is a distribution description",
                 "label": "label",
                 "origin": "origin",
-                "suites": [
+                "components": [
                   "main",
                   "contrib",
                   "testing"
