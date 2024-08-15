@@ -14,7 +14,7 @@ const CONFIG_PATH: &str = ".config/repository_structure.yaml";
 const PUBLISH_PATH: &str = "/tmp/publish";
 
 pub async fn run_server(base_url: &str) {
-    package::create_uploads_directory().await.expect("Could not create uploads directory"); // Not tested yet
+    package::create_directories().await.expect("Could not create uploads directory"); // Not tested yet
     let listener = tokio::net::TcpListener::bind(base_url)
         .await
         .unwrap();
@@ -42,7 +42,7 @@ fn app(config_path: &str) -> Router {
     let shared_archive = Arc::new(archive); 
 
     Router::new().route("/v1/packages", get(package::get_packages))
-        .route("/v1/packages/upload/:package_name", post(package::upload_package))
+        .route("/v1/packages/upload/:package_name", post(package::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repositories)).with_state(shared_archive)
 
 }

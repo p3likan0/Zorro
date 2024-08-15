@@ -105,7 +105,7 @@ mod tests {
     use super::*;
     use tempdir::TempDir;
 
-    // Testing implementation
+    // Date time testing implementation
     struct MockDateTimeProvider;
     impl DateTimeProvider for MockDateTimeProvider {
         fn current_time_rfc2822(&self) -> String {
@@ -145,6 +145,5 @@ MD5Sum:
 SHA256:
 "#;
         assert_eq!(expected_contents, file_contents);
-
     }
 }

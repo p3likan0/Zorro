@@ -22,6 +22,7 @@ futures = "0.3"
 tokio-util = { version = "0", features = ["full"] }
 serde_yaml = "0"
 chrono = "0.4"
+debpkg = "0"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
