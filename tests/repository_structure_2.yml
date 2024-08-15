@@ -1,0 +1,20 @@
+---
+uploads_dir: "/tmp/tests2/uploads"
+pool_dir: "/tmp/tests2/pool"
+dists:
+  stable:
+    origin: "origin"
+    label: "label"
+    version: "version"
+    codename: "codename"
+    description: "this is a distribution description"
+    components: ["main", "contrib", "testing"]
+    architectures: ["arm64","amd64"]
+  unstable:
+    origin: "origin"
+    label: "label"
+    version: "version"
+    codename: "codename"
+    description: "this is a distribution description"
+    components: ["main", "contrib", "testing"]
+    architectures: ["arm64","amd64"]

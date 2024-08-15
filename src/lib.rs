@@ -95,6 +95,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handler_upload_library_package() {
+        let test_tmp_dir = std::path::Path::new("/tmp/tests2");
+        if test_tmp_dir.exists(){
+            std::fs::remove_dir_all("/tmp/tests2").expect("Failed to remove a tests temp dir");
+        }
+        let app = app("tests/repository_structure_2.yml");
+        let deb_orig_contents = std::fs::read("tests/packages/libsqlite0_2.8.17-15+deb10u1_amd64.deb").expect("Failed to test package");
+
+        let response = app
+            .oneshot(Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/v1/packages/upload/libsqlite0_2.8.17-15+deb10u1_amd64.deb")
+                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .await
+            .unwrap();
+        let expected_deb = std::path::Path::new("/tmp/tests2/pool/lib/s/libsqlite0_2.8.17-15+deb10u1_amd64.deb");
+        assert!(expected_deb.exists());
+        let deb_uploaded_contents = std::fs::read(expected_deb).expect("Failed to read uploaded file");
+        assert_eq!(&deb_orig_contents, &deb_uploaded_contents);
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn handler_get_repositories() {
         let app = app("tests/repository_structure_1.yml");
 

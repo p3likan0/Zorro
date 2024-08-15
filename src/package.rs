@@ -41,7 +41,7 @@ fn move_package_to_pool(deb_path: &PathBuf, pool_dir: &str) -> Result<(), (Statu
     // Since there are going to be a lot of libx_1_2_3_arch.deb packages, we crate a subdirectory
     // for each one. Ex /lib/a/liba_1_2_3_amd64.deb, /lib/b/libb_1_2_3_amd64.deb
     if file_name_str.starts_with("lib"){
-        let lib_fourth_char = file_name_str.chars().nth(4).expect("Library package does not contain a valid name");
+        let lib_fourth_char = file_name_str.chars().nth(3).expect("Library package does not contain a valid name");
         dest_dir = std::path::Path::new(&pool_dir).join("lib").join(lib_fourth_char.to_string());
     } else {
         let pkg_first_char = file_name_str.chars().nth(0).expect("Package does not contain a valid name");
