@@ -1,4 +1,6 @@
 ---
+uploads_dir: "/tmp/tests/uploads"
+pool_dir: "/tmp/tests/pool"
 dists:
   stable:
     origin: "origin"

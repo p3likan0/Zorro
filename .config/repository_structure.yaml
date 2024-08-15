@@ -1,4 +1,6 @@
 ---
+uploads_dir: "uploads"
+pool_dir: "pool"
 dists:
   stable:
     origin: "origin"

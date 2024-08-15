@@ -14,7 +14,6 @@ const CONFIG_PATH: &str = ".config/repository_structure.yaml";
 const PUBLISH_PATH: &str = "/tmp/publish";
 
 pub async fn run_server(base_url: &str) {
-    package::create_directories().await.expect("Could not create uploads directory"); // Not tested yet
     let listener = tokio::net::TcpListener::bind(base_url)
         .await
         .unwrap();
@@ -38,6 +37,7 @@ fn app(config_path: &str) -> Router {
         release.save_to_file(PUBLISH_PATH).expect("could not save to file");
     }
 
+    package::create_directories(&archive).expect("Could not create uploads directory"); // Not tested yet
 
     let shared_archive = Arc::new(archive); 
 
@@ -72,6 +72,29 @@ mod tests {
 
     }
     #[tokio::test]
+    async fn handler_upload_package() {
+        let test_tmp_dir = std::path::Path::new("/tmp/tests");
+        if test_tmp_dir.exists(){
+            std::fs::remove_dir_all("/tmp/tests").expect("Failed to remove a tests temp dir");
+        }
+        let app = app("tests/repository_structure_1.yml");
+        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+
+        let response = app
+            .oneshot(Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .await
+            .unwrap();
+        let expected_deb = std::path::Path::new("/tmp/tests/pool/h/hello_2.10-2_amd64.deb");
+        assert!(expected_deb.exists());
+        let deb_uploaded_contents = std::fs::read(expected_deb).expect("Failed to read uploaded file");
+        assert_eq!(&deb_orig_contents, &deb_uploaded_contents);
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn handler_get_repositories() {
         let app = app("tests/repository_structure_1.yml");
 
@@ -83,8 +106,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&body).unwrap();
-        println!("{:#}", body);
+        //println!("{:#}", body);
         let expected_json = json!({
+            "uploads_dir": "/tmp/tests/uploads",
+            "pool_dir": "/tmp/tests/pool",
             "dists": {
               "stable": {
                 "architectures": [

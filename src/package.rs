@@ -3,6 +3,7 @@ use axum::{
     body::Bytes,
     http::StatusCode,
     response::Json,
+    extract::State,
     BoxError,
 };
 use std::path::PathBuf;
@@ -12,6 +13,9 @@ use tokio_util::io::StreamReader;
 use tokio::{io::BufWriter};
 use std::io;
 
+use crate::repository::RepositoryConfig;
+use std::sync::Arc;
+
 #[derive(Serialize, Deserialize)]
 pub struct Package {
     pub name: String,
@@ -19,17 +23,18 @@ pub struct Package {
     pub hash: String
 }
 
-const UPLOADS_DIRECTORY: &str = "uploads";
-const POOL_DIRECTORY: &str = "pool";
 
-pub async fn create_directories() -> std::io::Result<()> {
-    tokio::fs::create_dir_all(UPLOADS_DIRECTORY).await?;
-    tokio::fs::create_dir_all(POOL_DIRECTORY).await
+pub fn create_directories(config: &crate::repository::RepositoryConfig) -> std::io::Result<()> {
+    println!("Creating directories: {}, {}", &config.uploads_dir, &config.pool_dir);
+    let uploads_dir = std::path::Path::new(&config.uploads_dir);
+    let pool_dir = std::path::Path::new(&config.pool_dir);
+    std::fs::create_dir_all(uploads_dir)?;
+    std::fs::create_dir_all(pool_dir)
 }
 
 // We move the package using rename, which brings the limitation of the file needing to be in the
 // same filesystem but is extremely fast.
-fn move_package_to_pool(deb_path: &PathBuf) -> Result<(), (StatusCode, String)> {
+fn move_package_to_pool(deb_path: &PathBuf, pool_dir: &str) -> Result<(), (StatusCode, String)> {
     let dest_dir: PathBuf;
     let file_name_str = deb_path.file_name().expect("Could not decode package name")
         .to_str().expect("Could not decode package name to string");
@@ -37,10 +42,10 @@ fn move_package_to_pool(deb_path: &PathBuf) -> Result<(), (StatusCode, String)> 
     // for each one. Ex /lib/a/liba_1_2_3_amd64.deb, /lib/b/libb_1_2_3_amd64.deb
     if file_name_str.starts_with("lib"){
         let lib_fourth_char = file_name_str.chars().nth(4).expect("Library package does not contain a valid name");
-        dest_dir = std::path::Path::new(POOL_DIRECTORY).join("lib").join(lib_fourth_char.to_string());
+        dest_dir = std::path::Path::new(&pool_dir).join("lib").join(lib_fourth_char.to_string());
     } else {
-        let pkg_first_char = file_name_str.chars().nth(1).expect("Package does not contain a valid name");
-        dest_dir = std::path::Path::new(POOL_DIRECTORY).join(pkg_first_char.to_string());
+        let pkg_first_char = file_name_str.chars().nth(0).expect("Package does not contain a valid name");
+        dest_dir = std::path::Path::new(&pool_dir).join(pkg_first_char.to_string());
     }
     std::fs::create_dir_all(&dest_dir).map_err(|err| {
         eprintln!("Error creating dir: {}, error: {}", dest_dir.display(), err);
@@ -87,14 +92,15 @@ fn validate_package(deb_path: &PathBuf) -> Result<(), (StatusCode, String)> {
 }
 
 pub async fn handle_upload_package(
+    State(config): State<Arc<RepositoryConfig>>,
     Path(package_name): Path<String>,
     request: Request,
 ) -> Result<(), (StatusCode, String)> {
     validate_package_name(&package_name)?;
-    let path = std::path::Path::new(UPLOADS_DIRECTORY).join(&package_name);
+    let path = std::path::Path::new(&config.pool_dir).join(&package_name);
     stream_to_file(&path, request.into_body().into_data_stream()).await?;
     validate_package(&path)?;
-    move_package_to_pool(&path)
+    move_package_to_pool(&path, &config.pool_dir)
 }
 
 // to prevent directory traversal attacks we ensure the path consists of exactly one normal
@@ -120,6 +126,7 @@ where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
 {
+    println!("receiving: {}",path.display());
     async {
         // Convert the stream into an `AsyncRead`.
         let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
@@ -127,6 +134,7 @@ where
         futures::pin_mut!(body_reader);
 
         let mut file = BufWriter::new(tokio::fs::File::create(path).await?);
+        println!("HANDLEEER");
 
         // Copy the body into the file.
         tokio::io::copy(&mut body_reader, &mut file).await?;

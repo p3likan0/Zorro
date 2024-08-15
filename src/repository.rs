@@ -13,6 +13,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RepositoryConfig {
+    pub uploads_dir: String,
+    pub pool_dir: String,
     pub dists: HashMap<String, Distribution>
 }
 
