@@ -23,6 +23,7 @@ tokio-util = { version = "0", features = ["full"] }
 serde_yaml = "0"
 chrono = "0.4"
 debpkg = "0"
+rusqlite = { version = "0.32.0", features = ["bundled"] }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

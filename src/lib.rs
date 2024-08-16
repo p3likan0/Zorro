@@ -41,7 +41,8 @@ fn app(config_path: &str) -> Router {
 
     let shared_archive = Arc::new(archive); 
 
-    Router::new().route("/v1/packages", get(package::get_packages))
+    Router::new()
+        //.route("/v1/packages", get(package::get_packages))
         .route("/v1/packages/upload/:package_name", post(package::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repositories)).with_state(shared_archive)
 
