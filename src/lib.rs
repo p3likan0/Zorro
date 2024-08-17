@@ -4,9 +4,10 @@ use axum::{
     Router
 };
 
-mod package;
 mod repository;
+mod packages;
 mod release;
+
 
 use std::sync::Arc;
 
@@ -37,13 +38,13 @@ fn app(config_path: &str) -> Router {
         release.save_to_file(PUBLISH_PATH).expect("could not save to file");
     }
 
-    package::create_directories(&archive).expect("Could not create uploads directory"); // Not tested yet
+    packages::create_directories(&archive).expect("Could not create uploads directory"); // Not tested yet
 
     let shared_archive = Arc::new(archive); 
 
     Router::new()
         //.route("/v1/packages", get(package::get_packages))
-        .route("/v1/packages/upload/:package_name", post(package::handle_upload_package))
+        .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repositories)).with_state(shared_archive)
 
 }
