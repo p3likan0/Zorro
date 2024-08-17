@@ -5,6 +5,8 @@ use std::{io, io::{Error, ErrorKind::{Other, InvalidData}}};
 use sha2::{Sha256};
 use sha1::Sha1;
 use md5::Md5;
+use std::{fmt::Write, fmt}; // For using the write! macro with Strings   
+use std::os::linux::fs::MetadataExt;
 
 use super::hash_utils::calculate_hash;
 
@@ -46,6 +48,70 @@ struct DebianBinaryControl {
 }
 
 impl DebianBinaryPackage {
+    /// Formats the description for Debian control files with proper indentations for continuation lines.
+    fn apply_debian_format(description: &str) -> Result<String, fmt::Error> {
+        let mut output = String::new();
+        let lines = description.split('\n').enumerate();
+        for (index, line) in lines {
+            if index == 0 {
+                writeln!(output, "{}", line)?;
+                continue;
+            }
+            writeln!(output, " {}", line)?;
+        }
+        Ok(output)
+    }
+
+    pub fn generate_package_index(self) -> Result<String, fmt::Error> {
+        let mut output = String::new();
+
+        writeln!(output, "Package: {}", self.control.package)?;
+        if let Some(ref source) = self.control.source {
+            writeln!(output, "Source: {}", source)?;
+        }
+        writeln!(output, "Version: {}", self.control.version)?;
+        if let Some(ref section) = self.control.section {
+            writeln!(output, "Section: {}", section)?;
+        }
+        if let Some(ref priority) = self.control.priority {
+            writeln!(output, "Priority: {}", priority)?;
+        }
+        writeln!(output, "Architecture: {}", self.control.architecture)?;
+        if let Some(ref essential) = self.control.essential {
+            writeln!(output, "Essential: {}", essential)?;
+        }
+        writeln!(output, "Filename: {}", self.filename)?;
+        writeln!(output, "Size: {}", self.size)?;
+        writeln!(output, "MD5sum: {}", self.md5sum)?;
+        writeln!(output, "SHA1: {}", self.sha1)?;
+        writeln!(output, "SHA256: {}", self.sha256)?;
+        if let Some(ref md5) = self.description_md5 {
+            writeln!(output, "Description-md5: {}", md5)?;
+        }
+        writeln!(output, "Maintainer: {}", self.control.maintainer)?;
+        write!(output, "Description: {}\n", DebianBinaryPackage::apply_debian_format(&self.control.description)?)?;
+        if let Some(ref homepage) = self.control.homepage {
+            writeln!(output, "Homepage: {}", homepage)?;
+        }
+        // Optional fields should be handled carefully
+        if let Some(ref field) = self.control.depends { writeln!(output, "Depends: {}", field)?; }
+        if let Some(ref field) = self.control.recommends { writeln!(output, "Recommends: {}", field)?; }
+        if let Some(ref field) = self.control.suggests { writeln!(output, "Suggests: {}", field)?; }
+        if let Some(ref field) = self.control.enhances { writeln!(output, "Enhances: {}", field)?; }
+        if let Some(ref field) = self.control.pre_depends { writeln!(output, "Pre-Depends: {}", field)?; }
+        if let Some(ref field) = self.control.breaks { writeln!(output, "Breaks: {}", field)?; }
+        if let Some(ref field) = self.control.conflicts { writeln!(output, "Conflicts: {}", field)?; }
+        if let Some(ref field) = self.control.provides { writeln!(output, "Provides: {}", field)?; }
+        if let Some(ref field) = self.control.replaces { writeln!(output, "Replaces: {}", field)?; }
+        if let Some(ref field) = self.control.installed_size { writeln!(output, "Installed-Size: {}", field)?; }
+        if let Some(ref field) = self.control.built_using { writeln!(output, "Built-Using: {}", field)?; }
+
+        // Separate packages with a blank line
+        writeln!(output)?;
+
+        Ok(output)
+    }
+
     fn read_control(deb_path: &path::Path) -> io::Result<debpkg::Control> {
         // Open the Debian package file
         let deb_file = std::fs::File::open(deb_path)?;
@@ -140,10 +206,16 @@ impl DebianBinaryPackage {
         // Check if the pkg already exists in the db
         let deb_path = DebianBinaryPackage::move_package_to_pool(&uploaded_path, &pool_dir)?;
         let (md5, sha1, sha256) = DebianBinaryPackage::calculate_hashes(&deb_path)?;
+        let file_metadata = std::fs::metadata(&deb_path)?;
+        let package_size = file_metadata.st_size(); 
         let deb_path = deb_path.to_str()
             .ok_or(Error::new(Other, format!("Could not get string from deb_path: {}", deb_path.display())))?;
-        let package = DebianBinaryPackage::new_from_control(&control, &md5, &sha1, &sha256, deb_path, 123);
-        println!("package: {:#?}", package);
+        let package = DebianBinaryPackage::new_from_control(&control, &md5, &sha1, &sha256, deb_path, package_size)?;
+        let package_index = package.generate_package_index()
+            .map_err(|err|{
+                Error::new(InvalidData, format!("Could not generate package index package: {}, error {}", deb_path, err))
+            })?;
+        println!("package: {:#}", package_index);
         Ok(())
     }
 
