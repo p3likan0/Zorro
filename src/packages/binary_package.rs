@@ -88,9 +88,9 @@ impl DebianBinaryPackage {
             filename: filename.to_string(),
             size: size,
             key: key, 
-            MD5sum: md5.to_string(),
-            SHA1: sha1.to_string(),
-            SHA256: sha256.to_string(),
+            md5sum: md5.to_string(),
+            sha1: sha1.to_string(),
+            sha256: sha256.to_string(),
             description_md5: None,
             control: DebianBinaryControl {
                 package: control.name().to_string(),
@@ -117,20 +117,21 @@ impl DebianBinaryPackage {
             }
         })
     }
-    fn calculate_hashes(file_path: &path::Path) {
-        match calculate_hash::<Md5>(&file_path) {
-            Ok(hash) => println!("SHA256 hash: {}", hash),
-            Err(e) => println!("Error calculating SHA256: {}", e),
-        }
-        match calculate_hash::<Sha1>(&file_path) {
-            Ok(hash) => println!("SHA1 hash: {}", hash),
-            Err(e) => println!("Error calculating SHA1: {}", e),
-        }
+    fn calculate_hashes(file_path: &path::Path) -> io::Result<(String, String, String)> {
+        let md5 = match calculate_hash::<Md5>(&file_path) {
+            Ok(hash) => hash,
+            Err(err) => return Err(Error::new(Other, format!("Error calculating md5: {}", err))),
+        };
+        let sha1 = match calculate_hash::<Sha1>(&file_path) {
+            Ok(hash) => hash,
+            Err(err) => return Err(Error::new(Other, format!("Error calculating sha1: {}", err))),
+        };
     
-        match calculate_hash::<Sha256>(&file_path) {
-            Ok(hash) => println!("SHA1 hash: {}", hash),
-            Err(e) => println!("Error calculating SHA1: {}", e),
-        }
+        let sha256 = match calculate_hash::<Sha256>(&file_path) {
+            Ok(hash) => hash,
+            Err(err) => return Err(Error::new(Other, format!("Error calculating sha256: {}", err))),
+        };
+        Ok((md5, sha1, sha256))
     }
 
     pub fn process(uploaded_path: &path::Path, pool_dir: &str) -> io::Result<()>{
@@ -138,10 +139,10 @@ impl DebianBinaryPackage {
         let control = DebianBinaryPackage::read_control(&uploaded_path)?;
         // Check if the pkg already exists in the db
         let deb_path = DebianBinaryPackage::move_package_to_pool(&uploaded_path, &pool_dir)?;
-        DebianBinaryPackage::calculate_hashes(&deb_path);
+        let (md5, sha1, sha256) = DebianBinaryPackage::calculate_hashes(&deb_path)?;
         let deb_path = deb_path.to_str()
             .ok_or(Error::new(Other, format!("Could not get string from deb_path: {}", deb_path.display())))?;
-        let package = DebianBinaryPackage::new_from_control(&control, "md5", "sha1", "sha256", deb_path, 123);
+        let package = DebianBinaryPackage::new_from_control(&control, &md5, &sha1, &sha256, deb_path, 123);
         println!("package: {:#?}", package);
         Ok(())
     }

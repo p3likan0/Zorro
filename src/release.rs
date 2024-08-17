@@ -48,18 +48,6 @@ impl DebianRelease {
         }
     }
     
-    pub fn add_checksum_md5(&mut self, file: String, checksum: String) {
-        self.checksums_md5.insert(file, checksum);
-    }
-
-    pub fn add_checksum_sha1(&mut self, file: String, checksum: String) {
-        self.checksums_sha1.insert(file, checksum);
-    }
-
-    pub fn add_checksum_sha256(&mut self, file: String, checksum: String) {
-        self.checksums_sha256.insert(file, checksum);
-    }
-
     fn generate_release_file_contents<T: DateTimeProvider>(&self, time_provider: &T) -> String {
         let mut contents = format!(
             "Origin: {}\nLabel: {}\nSuite: {}\nVersion: {}\nCodename: {}\nDate: {}\nArchitectures: {}\nComponents: {}\nDescription: {}\n",

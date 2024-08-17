@@ -43,10 +43,6 @@ impl RepositoryConfig{
         //}
         archive
     }
-
-    pub fn print_structure(self){
-        println!("{:#?}", self);
-    }
 }
 
 pub async fn handle_get_repositories(
