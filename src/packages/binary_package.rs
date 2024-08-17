@@ -47,67 +47,79 @@ struct DebianBinaryControl {
     built_using: Option<String>,
 }
 
-impl DebianBinaryPackage {
-    /// Formats the description for Debian control files with proper indentations for continuation lines.
-    fn apply_debian_format(description: &str) -> Result<String, fmt::Error> {
-        let mut output = String::new();
-        let lines = description.split('\n').enumerate();
+macro_rules! write_formatted {
+    ($output:expr, $format_str:expr, $line:expr) => {{
+        use std::fmt::Write;
+
+        write!($output, $format_str, $($arg)*)
+    }};
+}
+
+// The debian format is indenting all but the first line.
+// Ex:
+// Description: bla ble blu
+//  bla ble blo
+macro_rules! write_with_debian_format {
+    ($output:expr, $format:expr, $text:expr) => {{
+        use std::fmt::Write;
+
+        let lines = $text.split('\n').enumerate();
         for (index, line) in lines {
             if index == 0 {
-                writeln!(output, "{}", line)?;
+                writeln!($output, $format, line)?;
                 continue;
+            } else {
+                writeln!($output, " {}", line)?;
             }
-            writeln!(output, " {}", line)?;
         }
-        Ok(output)
-    }
-
+        Ok(())
+    }};
+}
+    
+impl DebianBinaryPackage {
     pub fn generate_package_index(self) -> Result<String, fmt::Error> {
         let mut output = String::new();
 
-        writeln!(output, "Package: {}", self.control.package)?;
+        write_with_debian_format!(output, "Package: {}", self.control.package)?;
         if let Some(ref source) = self.control.source {
-            writeln!(output, "Source: {}", source)?;
+            write_with_debian_format!(output, "Source: {}", source)?;
         }
-        writeln!(output, "Version: {}", self.control.version)?;
+        write_with_debian_format!(output, "Version: {}", self.control.version)?;
         if let Some(ref section) = self.control.section {
-            writeln!(output, "Section: {}", section)?;
+            write_with_debian_format!(output, "Section: {}", section)?;
         }
         if let Some(ref priority) = self.control.priority {
-            writeln!(output, "Priority: {}", priority)?;
+            write_with_debian_format!(output, "Priority: {}", priority)?;
         }
-        writeln!(output, "Architecture: {}", self.control.architecture)?;
+        write_with_debian_format!(output, "Architecture: {}", self.control.architecture)?;
         if let Some(ref essential) = self.control.essential {
-            writeln!(output, "Essential: {}", essential)?;
+            write_with_debian_format!(output, "Essential: {}", essential)?;
         }
-        writeln!(output, "Filename: {}", self.filename)?;
+        write_with_debian_format!(output, "Filename: {}", self.filename)?;
         writeln!(output, "Size: {}", self.size)?;
-        writeln!(output, "MD5sum: {}", self.md5sum)?;
-        writeln!(output, "SHA1: {}", self.sha1)?;
-        writeln!(output, "SHA256: {}", self.sha256)?;
+        write_with_debian_format!(output, "MD5sum: {}", self.md5sum)?;
+        write_with_debian_format!(output, "SHA1: {}", self.sha1)?;
+        write_with_debian_format!(output, "SHA256: {}", self.sha256)?;
         if let Some(ref md5) = self.description_md5 {
-            writeln!(output, "Description-md5: {}", md5)?;
+            write_with_debian_format!(output, "Description-md5: {}", md5)?;
         }
-        writeln!(output, "Maintainer: {}", self.control.maintainer)?;
-        write!(output, "Description: {}\n", DebianBinaryPackage::apply_debian_format(&self.control.description)?)?;
+        write_with_debian_format!(output, "Maintainer: {}", self.control.maintainer)?;
+        write_with_debian_format!(output, "Description: {}", &self.control.description)?;
         if let Some(ref homepage) = self.control.homepage {
-            writeln!(output, "Homepage: {}", homepage)?;
+            write_with_debian_format!(output, "Homepage: {}", homepage)?;
         }
         // Optional fields should be handled carefully
-        if let Some(ref field) = self.control.depends { writeln!(output, "Depends: {}", field)?; }
-        if let Some(ref field) = self.control.recommends { writeln!(output, "Recommends: {}", field)?; }
-        if let Some(ref field) = self.control.suggests { writeln!(output, "Suggests: {}", field)?; }
-        if let Some(ref field) = self.control.enhances { writeln!(output, "Enhances: {}", field)?; }
-        if let Some(ref field) = self.control.pre_depends { writeln!(output, "Pre-Depends: {}", field)?; }
-        if let Some(ref field) = self.control.breaks { writeln!(output, "Breaks: {}", field)?; }
-        if let Some(ref field) = self.control.conflicts { writeln!(output, "Conflicts: {}", field)?; }
-        if let Some(ref field) = self.control.provides { writeln!(output, "Provides: {}", field)?; }
-        if let Some(ref field) = self.control.replaces { writeln!(output, "Replaces: {}", field)?; }
-        if let Some(ref field) = self.control.installed_size { writeln!(output, "Installed-Size: {}", field)?; }
-        if let Some(ref field) = self.control.built_using { writeln!(output, "Built-Using: {}", field)?; }
-
-        // Separate packages with a blank line
-        writeln!(output)?;
+        if let Some(ref field) = self.control.depends { write_with_debian_format!(output, "Depends: {}", field)?; }
+        if let Some(ref field) = self.control.recommends { write_with_debian_format!(output, "Recommends: {}", field)?; }
+        if let Some(ref field) = self.control.suggests { write_with_debian_format!(output, "Suggests: {}", field)?; }
+        if let Some(ref field) = self.control.enhances { write_with_debian_format!(output, "Enhances: {}", field)?; }
+        if let Some(ref field) = self.control.pre_depends { write_with_debian_format!(output, "Pre-Depends: {}", field)?; }
+        if let Some(ref field) = self.control.breaks { write_with_debian_format!(output, "Breaks: {}", field)?; }
+        if let Some(ref field) = self.control.conflicts { write_with_debian_format!(output, "Conflicts: {}", field)?; }
+        if let Some(ref field) = self.control.provides { write_with_debian_format!(output, "Provides: {}", field)?; }
+        if let Some(ref field) = self.control.replaces { write_with_debian_format!(output, "Replaces: {}", field)?; }
+        if let Some(ref field) = self.control.installed_size { write_with_debian_format!(output, "Installed-Size: {}", field)?; }
+        if let Some(ref field) = self.control.built_using { write_with_debian_format!(output, "Built-Using: {}", field)?; }
 
         Ok(output)
     }
