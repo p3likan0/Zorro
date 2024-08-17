@@ -2,17 +2,20 @@ use serde::{Deserialize, Serialize};
 use debpkg::Control;
 use std::{path, path::PathBuf};
 use std::{io, io::{Error, ErrorKind::{Other, InvalidData}}};
+use sha2::{Sha256};
+use sha1::Sha1;
+use md5::Md5;
 
-use super::hash_utils::{calculate_md5, calculate_sha1, calculate_sha256};
+use super::hash_utils::calculate_hash;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DebianBinaryPackage {
     key: String,
     filename: String,
     size: u64,
-    MD5sum: String,
-    SHA1: String,
-    SHA256: String,
+    md5sum: String,
+    sha1: String,
+    sha256: String,
     description_md5: Option<String>,
     control: DebianBinaryControl,
 }
@@ -115,19 +118,18 @@ impl DebianBinaryPackage {
         })
     }
     fn calculate_hashes(file_path: &path::Path) {
-        match calculate_md5(&file_path) {
-            Ok(hash) => println!("MD5 hash: {}", hash),
-            Err(e) => println!("Error calculating MD5: {}", e),
+        match calculate_hash::<Md5>(&file_path) {
+            Ok(hash) => println!("SHA256 hash: {}", hash),
+            Err(e) => println!("Error calculating SHA256: {}", e),
         }
-    
-        match calculate_sha1(&file_path) {
+        match calculate_hash::<Sha1>(&file_path) {
             Ok(hash) => println!("SHA1 hash: {}", hash),
             Err(e) => println!("Error calculating SHA1: {}", e),
         }
     
-        match calculate_sha256(&file_path) {
-            Ok(hash) => println!("SHA256 hash: {}", hash),
-            Err(e) => println!("Error calculating SHA256: {}", e),
+        match calculate_hash::<Sha256>(&file_path) {
+            Ok(hash) => println!("SHA1 hash: {}", hash),
+            Err(e) => println!("Error calculating SHA1: {}", e),
         }
     }
 

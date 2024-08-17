@@ -24,10 +24,11 @@ serde_yaml = "0"
 chrono = "0.4"
 debpkg = "0"
 rusqlite = { version = "0.32.0", features = ["bundled"] }
-md5 = "0.7"
+md-5 = "0.10"
 sha1 = "0.10"
 sha2 = "0.10"
 digest = "0.10"
+hex = "0.4"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
