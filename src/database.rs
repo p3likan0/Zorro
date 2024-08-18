@@ -14,11 +14,9 @@ pub fn init_db_pool_connection(db_path: &str) -> io::Result<Pool> {
     r2d2::Pool::new(manager).map_err(|err|{Error::new(Other,format!("Could not create connection manager, error: {}", err))})
 }
 
-pub fn create_debian_binary_package_table(db_pool: &Pool) -> io::Result<()> {
-    let conn = db_pool.get().map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
-    conn.execute(
+pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
+    let table_creations = vec![
         "CREATE TABLE IF NOT EXISTS debian_binary_package (
-            key TEXT PRIMARY KEY,
             filename TEXT NOT NULL,
             size INTEGER NOT NULL,
             md5sum TEXT NOT NULL,
@@ -45,19 +43,27 @@ pub fn create_debian_binary_package_table(db_pool: &Pool) -> io::Result<()> {
             maintainer TEXT NOT NULL,
             description TEXT NOT NULL,
             homepage TEXT,
-            built_using TEXT
-        ) WITHOUT ROWID", [],
-    ).map_err(|err|{Error::new(Other, format!("Could not insert in db, error: {}",err))})?; 
+            built_using TEXT,
+            PRIMARY KEY (package, version, architecture)
+        )",
+    ];
+
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    for sql in table_creations {
+        conn.execute(sql, [])
+            .map_err(|err|{Error::new(Other, format!("Could not insert in db, error: {}",err))})?;
+    }
     Ok(())
 }
 
 pub fn insert_debian_binary_package(db_pool: &Pool, pkg: &DebianBinaryPackage) -> io::Result<()> {
     let conn = db_pool.get().map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
     conn.execute(
-        "INSERT INTO debian_binary_package (key, filename, size, md5sum, sha1, sha256, description_md5, package, source, version, section, priority, architecture, essential, depends, recommends, suggests, enhances, pre_depends, breaks, conflicts, provides, replaces, installed_size, maintainer, description, homepage, built_using)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+        "INSERT INTO debian_binary_package (filename, size, md5sum, sha1, sha256, description_md5, package, source, version, section, priority, architecture, essential, depends, recommends, suggests, enhances, pre_depends, breaks, conflicts, provides, replaces, installed_size, maintainer, description, homepage, built_using)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
         params![
-            pkg.key, pkg.filename, pkg.size, pkg.md5sum, pkg.sha1, pkg.sha256, pkg.description_md5,
+            pkg.filename, pkg.size, pkg.md5sum, pkg.sha1, pkg.sha256, pkg.description_md5,
             pkg.control.package, pkg.control.source, pkg.control.version, pkg.control.section,
             pkg.control.priority, pkg.control.architecture, pkg.control.essential, pkg.control.depends,
             pkg.control.recommends, pkg.control.suggests, pkg.control.enhances, pkg.control.pre_depends,
@@ -69,47 +75,46 @@ pub fn insert_debian_binary_package(db_pool: &Pool, pkg: &DebianBinaryPackage) -
     Ok(())
 }
 
-pub fn get_debian_binary_package(db_pool: &Pool, key: &str) -> io::Result<DebianBinaryPackage> {
+pub fn get_debian_binary_package(db_pool: &Pool, package_name: &str, package_version: &str, package_arch: &str) -> io::Result<DebianBinaryPackage> {
     let conn = db_pool.get().map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
     let mut stmt = conn.prepare(
-        "SELECT key, filename, size, md5sum, sha1, sha256, description_md5, package, source, version, section, priority, architecture, essential, depends, recommends, suggests, enhances, pre_depends, breaks, conflicts, provides, replaces, installed_size, maintainer, description, homepage, built_using
+        "SELECT filename, size, md5sum, sha1, sha256, description_md5, package, source, version, section, priority, architecture, essential, depends, recommends, suggests, enhances, pre_depends, breaks, conflicts, provides, replaces, installed_size, maintainer, description, homepage, built_using
         FROM debian_binary_package
-        WHERE key = ?1"
+        WHERE package = ?1 AND version = ?2 AND architecture = ?3",
     ).map_err(|err|{Error::new(Other, format!("Could not prepare query, error: {}",err))})?; 
-    let pkg = stmt.query_row(params![key], |row| {
+    let pkg = stmt.query_row(params![package_name, package_version, package_arch], |row| {
         Ok(DebianBinaryPackage {
-            key: row.get(0)?,
-            filename: row.get(1)?,
-            size: row.get(2)?,
-            md5sum: row.get(3)?,
-            sha1: row.get(4)?,
-            sha256: row.get(5)?,
-            description_md5: row.get(6)?,
+            filename: row.get(0)?,
+            size: row.get(1)?,
+            md5sum: row.get(2)?,
+            sha1: row.get(3)?,
+            sha256: row.get(4)?,
+            description_md5: row.get(5)?,
             control: DebianBinaryControl {
-                package: row.get(7)?,
-                source: row.get(8)?,
-                version: row.get(9)?,
-                section: row.get(10)?,
-                priority: row.get(11)?,
-                architecture: row.get(12)?,
-                essential: row.get(13)?,
-                depends: row.get(14)?,
-                recommends: row.get(15)?,
-                suggests: row.get(16)?,
-                enhances: row.get(17)?,
-                pre_depends: row.get(18)?,
-                breaks: row.get(19)?,
-                conflicts: row.get(20)?,
-                provides: row.get(21)?,
-                replaces: row.get(22)?,
-                installed_size: row.get(23)?,
-                maintainer: row.get(24)?,
-                description: row.get(25)?,
-                homepage: row.get(26)?,
-                built_using: row.get(27)?
+                package: row.get(6)?,
+                source: row.get(7)?,
+                version: row.get(8)?,
+                section: row.get(9)?,
+                priority: row.get(10)?,
+                architecture: row.get(11)?,
+                essential: row.get(12)?,
+                depends: row.get(13)?,
+                recommends: row.get(14)?,
+                suggests: row.get(15)?,
+                enhances: row.get(16)?,
+                pre_depends: row.get(17)?,
+                breaks: row.get(18)?,
+                conflicts: row.get(19)?,
+                provides: row.get(20)?,
+                replaces: row.get(21)?,
+                installed_size: row.get(22)?,
+                maintainer: row.get(23)?,
+                description: row.get(24)?,
+                homepage: row.get(25)?,
+                built_using: row.get(26)?
             }
         })
-    }).map_err(|err|{Error::new(Other, format!("Could not get package with key: {}, error: {}", key, err))})?; 
+    }).map_err(|err|{Error::new(Other, format!("Could not get package with name: {}, version: {}, arch: {}, error: {}", package_name, package_version, package_arch, err))})?; 
     Ok(pkg)
 }
 

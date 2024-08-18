@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Request},
+    extract::{Request, Query},
     body::Bytes,
     http::StatusCode,
     response::{Json, IntoResponse},
@@ -92,27 +92,22 @@ where
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
 }
 
-//pub async fn handle_get_package_by_key(
-//    State(repo): State<Arc<Repository>>,
-//    axum::extract::Path(key): axum::extract::Path<String>,
-//    request: Request,
-//) -> Result<(), (StatusCode, String)> {
-//
-//    let package = database::get_debian_binary_package(&repo.db_conn, &key)
-//        .map_err(|err| {
-//            eprintln!("Could not find package with key: {}, error: {}", &key, err);
-//            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-//        })?;
-//    ( StatusCode::Ok, Json(package))
-//}
-//
 use serde_json::json;
+use serde::Deserialize;
 
-pub async fn handle_get_package_by_key(
+
+#[derive(Deserialize)]
+pub struct PackageQuery {
+    name: String,
+    version: String,
+    arch: String,
+}
+
+pub async fn handle_get_package_name_version_arch(
     State(repo): State<Arc<Repository>>,
-    axum::extract::Path(key): axum::extract::Path<String>,
+    Query(query): Query<PackageQuery>,
 )-> impl IntoResponse {
-    match database::get_debian_binary_package(&repo.db_conn, &key){
+    match database::get_debian_binary_package(&repo.db_conn, &query.name, &query.version, &query.arch){
         Ok(package) => (StatusCode::OK, Json(package)).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
             "error": format!("{}", err)

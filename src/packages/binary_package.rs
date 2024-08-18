@@ -13,7 +13,6 @@ use crate::database;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DebianBinaryPackage {
-    pub key: String,
     pub filename: String,
     pub size: u64,
     pub md5sum: String,
@@ -155,11 +154,10 @@ impl DebianBinaryPackage {
             None => return Err(Error::new(InvalidData, format!("Could not find Description for package: {}", filename)))
         };
         //let key = format!("{} {} {} {}", control.name(), control.version(), arch, md5);
-        let key = format!("{} {} {}", control.name(), control.version(), arch);
+        //let key = format!("{} {} {}", control.name(), control.version(), arch);
         Ok(DebianBinaryPackage{
             filename: filename.to_string(),
             size: size,
-            key: key, 
             md5sum: md5.to_string(),
             sha1: sha1.to_string(),
             sha256: sha256.to_string(),

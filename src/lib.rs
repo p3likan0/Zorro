@@ -39,13 +39,13 @@ fn app(config_path: &str) -> Router {
         release.save_to_file(PUBLISH_PATH).expect("could not save to file");
     }
 
-    database::create_debian_binary_package_table(&archive.db_conn).unwrap();
+    database::create_tables(&archive.db_conn).unwrap();
     packages::create_directories(&archive.config).expect("Could not create uploads directory"); // Not tested yet
 
     let shared_archive = Arc::new(archive); 
 
     Router::new()
-        .route("/v1/packages/:key", get(packages::handle_get_package_by_key))
+        .route("/v1/packages", get(packages::handle_get_package_name_version_arch))
         .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repositories))
         .with_state(shared_archive)
@@ -79,14 +79,13 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = app
-            .oneshot(Request::builder().uri("/v1/packages/hello%202.10-2%20amd64").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/v1/packages?name=hello&version=2.10-2&arch=amd64").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&body).unwrap();
-        println!("{:#}",body);
         let expected_json = json!({
                 "control": {
                     "architecture": "amd64",
@@ -113,7 +112,6 @@ mod tests {
                 },
               "description_md5": null,
               "filename": format!("{}/h/hello_2.10-2_amd64.deb", config.pool_dir),
-              "key": "hello 2.10-2 amd64",
               "md5sum": "52b0cad2e741dd722c3e2e16a0aae57e",
               "sha1": "9942852719b998fb190848966bcbe13f10534842",
               "sha256": "35b1508eeee9c1dfba798c4c04304ef0f266990f936a51f165571edf53325cbc",
