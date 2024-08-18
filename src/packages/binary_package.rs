@@ -9,50 +9,43 @@ use std::{fmt::Write, fmt}; // For using the write! macro with Strings
 use std::os::linux::fs::MetadataExt;
 
 use super::hash_utils::calculate_hash;
+use crate::database;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DebianBinaryPackage {
-    key: String,
-    filename: String,
-    size: u64,
-    md5sum: String,
-    sha1: String,
-    sha256: String,
-    description_md5: Option<String>,
-    control: DebianBinaryControl,
+    pub key: String,
+    pub filename: String,
+    pub size: u64,
+    pub md5sum: String,
+    pub sha1: String,
+    pub sha256: String,
+    pub description_md5: Option<String>,
+    pub control: DebianBinaryControl,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct DebianBinaryControl {
-    package: String,
-    source: Option<String>,
-    version: String,
-    section: Option<String>,
-    priority: Option<String>,
-    architecture: String,
-    essential: Option<String>,
-    depends: Option<String>,
-    recommends: Option<String>,
-    suggests: Option<String>,
-    enhances: Option<String>,
-    pre_depends: Option<String>,
-    breaks: Option<String>,
-    conflicts: Option<String>,
-    provides: Option<String>,
-    replaces: Option<String>,
-    installed_size: Option<String>,
-    maintainer: String,
-    description: String,
-    homepage: Option<String>,
-    built_using: Option<String>,
-}
-
-macro_rules! write_formatted {
-    ($output:expr, $format_str:expr, $line:expr) => {{
-        use std::fmt::Write;
-
-        write!($output, $format_str, $($arg)*)
-    }};
+pub struct DebianBinaryControl {
+    pub package: String,
+    pub source: Option<String>,
+    pub version: String,
+    pub section: Option<String>,
+    pub priority: Option<String>,
+    pub architecture: String,
+    pub essential: Option<String>,
+    pub depends: Option<String>,
+    pub recommends: Option<String>,
+    pub suggests: Option<String>,
+    pub enhances: Option<String>,
+    pub pre_depends: Option<String>,
+    pub breaks: Option<String>,
+    pub conflicts: Option<String>,
+    pub provides: Option<String>,
+    pub replaces: Option<String>,
+    pub installed_size: Option<String>,
+    pub maintainer: String,
+    pub description: String,
+    pub homepage: Option<String>,
+    pub built_using: Option<String>,
 }
 
 // The debian format is indenting all but the first line.
@@ -161,7 +154,8 @@ impl DebianBinaryPackage {
             Some(description) => description,
             None => return Err(Error::new(InvalidData, format!("Could not find Description for package: {}", filename)))
         };
-        let key = format!("{} {} {} {}", control.name(), control.version(), arch, md5);
+        //let key = format!("{} {} {} {}", control.name(), control.version(), arch, md5);
+        let key = format!("{} {} {}", control.name(), control.version(), arch);
         Ok(DebianBinaryPackage{
             filename: filename.to_string(),
             size: size,
@@ -212,7 +206,7 @@ impl DebianBinaryPackage {
         Ok((md5, sha1, sha256))
     }
 
-    pub fn process(uploaded_path: &path::Path, pool_dir: &str) -> io::Result<()>{
+    pub fn process(uploaded_path: &path::Path, pool_dir: &str, db_conn: &database::Pool) -> io::Result<()>{
         // Read control to validate the package
         let control = DebianBinaryPackage::read_control(&uploaded_path)?;
         // Check if the pkg already exists in the db
@@ -223,6 +217,7 @@ impl DebianBinaryPackage {
         let deb_path = deb_path.to_str()
             .ok_or(Error::new(Other, format!("Could not get string from deb_path: {}", deb_path.display())))?;
         let package = DebianBinaryPackage::new_from_control(&control, &md5, &sha1, &sha256, deb_path, package_size)?;
+        database::insert_debian_binary_package(&db_conn, &package)?;
         let package_index = package.generate_package_index()
             .map_err(|err|{
                 Error::new(InvalidData, format!("Could not generate package index package: {}, error {}", deb_path, err))

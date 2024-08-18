@@ -11,10 +11,10 @@ use futures::{Stream, TryStreamExt};
 use tokio_util::io::StreamReader;
 use tokio::{io::BufWriter};
 use std::{io, io::{Error, ErrorKind::{Other, InvalidInput}}};
-use crate::repository::RepositoryConfig;
+use crate::repository::{Repository, RepositoryConfig};
 use std::sync::Arc;
 
-mod binary_package;
+pub mod binary_package;
 mod hash_utils;
 
 pub fn create_directories(config: &RepositoryConfig) -> io::Result<()> {
@@ -26,7 +26,7 @@ pub fn create_directories(config: &RepositoryConfig) -> io::Result<()> {
 }
 
 pub async fn handle_upload_package(
-    State(config): State<Arc<RepositoryConfig>>,
+    State(repo): State<Arc<Repository>>,
     axum::extract::Path(package_name): axum::extract::Path<String>,
     request: Request,
 ) -> Result<(), (StatusCode, String)> {
@@ -37,10 +37,10 @@ pub async fn handle_upload_package(
         })?;
 
     // Stream to file
-    let path = std::path::Path::new(&config.uploads_dir).join(&package_name);
+    let path = std::path::Path::new(&repo.config.uploads_dir).join(&package_name);
     stream_to_file(&path, request.into_body().into_data_stream()).await?;
 
-    binary_package::DebianBinaryPackage::process(&path, &config.pool_dir)
+    binary_package::DebianBinaryPackage::process(&path, &repo.config.pool_dir, &repo.db_conn)
         .map_err(|err| {
             eprintln!("Error: {}", err);
             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to process debian package".to_string())

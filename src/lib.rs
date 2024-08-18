@@ -7,6 +7,7 @@ use axum::{
 mod repository;
 mod packages;
 mod release;
+mod database;
 
 
 use std::sync::Arc;
@@ -23,8 +24,8 @@ pub async fn run_server(base_url: &str) {
 }
 
 fn app(config_path: &str) -> Router {
-    let archive = repository::RepositoryConfig::new(config_path);
-    for (suite, distribution) in &archive.dists {
+    let archive = repository::Repository::new(config_path).unwrap();
+    for (suite, distribution) in &archive.config.dists {
         let release = release::DebianRelease::new(
             suite.to_string(),
             distribution.components.clone(),
@@ -38,15 +39,16 @@ fn app(config_path: &str) -> Router {
         release.save_to_file(PUBLISH_PATH).expect("could not save to file");
     }
 
-    packages::create_directories(&archive).expect("Could not create uploads directory"); // Not tested yet
+    database::create_debian_binary_package_table(&archive.db_conn).unwrap();
+    packages::create_directories(&archive.config).expect("Could not create uploads directory"); // Not tested yet
 
     let shared_archive = Arc::new(archive); 
 
     Router::new()
         //.route("/v1/packages", get(package::get_packages))
         .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
-        .route("/v1/repositories", get(repository::handle_get_repositories)).with_state(shared_archive)
-
+        .route("/v1/repositories", get(repository::handle_get_repositories))
+        .with_state(shared_archive)
 }
 
 
@@ -133,6 +135,7 @@ mod tests {
         let body: Value = serde_json::from_slice(&body).unwrap();
         //println!("{:#}", body);
         let expected_json = json!({
+            "db_file": "/tmp/tests/zorro1.db",
             "uploads_dir": "/tmp/tests/uploads",
             "pool_dir": "/tmp/tests/pool",
             "dists": {

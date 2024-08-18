@@ -10,9 +10,29 @@ use axum::{
 };
 
 use std::sync::Arc;
+use std::{io, io::Error, io::ErrorKind::{InvalidData}};
+use crate::database;
+
+#[derive(Debug, Clone)]
+pub struct Repository {
+    pub config: RepositoryConfig,
+    pub db_conn: database::Pool,
+}
+
+impl Repository {
+    pub fn new(config_path: &str) -> io::Result<Repository> {
+        let config = RepositoryConfig::new(&config_path)?;
+        let db_conn = database::init_db_pool_connection(&config.db_file)?; 
+        Ok(Repository{
+            config,
+            db_conn
+        })
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RepositoryConfig {
+    pub db_file: String,
     pub uploads_dir: String,
     pub pool_dir: String,
     pub dists: HashMap<String, Distribution>
@@ -30,23 +50,14 @@ pub struct Distribution {
 }
 
 impl RepositoryConfig{
-    pub fn new(config_path: &str) -> Self{
-        let yaml_content = read_to_string(config_path)
-            .unwrap_or_else(|_| panic!("Cannot read config: {}", config_path));
-        println!("yaml: {}",yaml_content);
+    fn new(config_path: &str) -> io::Result<RepositoryConfig> {
+        let yaml_content = read_to_string(config_path)?;
         let archive: RepositoryConfig = serde_yaml::from_str(&yaml_content)
-            .unwrap_or_else(|_| panic!("Cannot parse yaml: {}", config_path));
-        //let archive: Result<RepositoryConfig, serde_yaml::Error> = serde_yaml::from_str(&yaml_content);
-        //match archive {
-        //    Ok(value) => return value,
-        //    Err(e) => panic!("Failed to parse as Value: {:?}", e),
-        //}
-        archive
+            .map_err(|err| {Error::new(InvalidData, format!("Could not decode yaml config: {}, error: {}", config_path, err))})?;
+        Ok(archive)
     }
 }
 
-pub async fn handle_get_repositories(
-    State(shared_object): State<Arc<RepositoryConfig>>,
-) -> impl IntoResponse {
-    Json(shared_object.as_ref().clone())
+pub async fn handle_get_repositories(State(shared_object): State<Arc<Repository>>) -> impl IntoResponse {
+    Json(shared_object.config.clone())
 }

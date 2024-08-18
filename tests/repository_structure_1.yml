@@ -1,4 +1,5 @@
 ---
+db_file: "/tmp/tests/zorro1.db"
 uploads_dir: "/tmp/tests/uploads"
 pool_dir: "/tmp/tests/pool"
 dists:
