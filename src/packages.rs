@@ -2,7 +2,7 @@ use axum::{
     extract::{Request},
     body::Bytes,
     http::StatusCode,
-    //response::Json,
+    response::{Json, IntoResponse},
     extract::State,
     BoxError,
 };
@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 pub mod binary_package;
 mod hash_utils;
+
+use crate::database;
 
 pub fn create_directories(config: &RepositoryConfig) -> io::Result<()> {
     println!("Creating directories: {}, {}", &config.uploads_dir, &config.pool_dir);
@@ -90,7 +92,30 @@ where
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
 }
 
-//pub async fn get_packages() -> Json<Package> {
-//    //let p = Package{package_name: "python3".to_string(), version: "1.2.3".to_string(), md5: "aoaeuaoue".to_string()};
-//    Json()
+//pub async fn handle_get_package_by_key(
+//    State(repo): State<Arc<Repository>>,
+//    axum::extract::Path(key): axum::extract::Path<String>,
+//    request: Request,
+//) -> Result<(), (StatusCode, String)> {
+//
+//    let package = database::get_debian_binary_package(&repo.db_conn, &key)
+//        .map_err(|err| {
+//            eprintln!("Could not find package with key: {}, error: {}", &key, err);
+//            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+//        })?;
+//    ( StatusCode::Ok, Json(package))
 //}
+//
+use serde_json::json;
+
+pub async fn handle_get_package_by_key(
+    State(repo): State<Arc<Repository>>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+)-> impl IntoResponse {
+    match database::get_debian_binary_package(&repo.db_conn, &key){
+        Ok(package) => (StatusCode::OK, Json(package)).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+            "error": format!("{}", err)
+        }))).into_response(),
+    }
+}

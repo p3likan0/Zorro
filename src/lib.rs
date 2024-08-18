@@ -45,7 +45,7 @@ fn app(config_path: &str) -> Router {
     let shared_archive = Arc::new(archive); 
 
     Router::new()
-        //.route("/v1/packages", get(package::get_packages))
+        .route("/v1/packages/:key", get(packages::handle_get_package_by_key))
         .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repositories))
         .with_state(shared_archive)
@@ -64,17 +64,63 @@ mod tests {
     use serde_json::{json, Value};
     use tempdir::TempDir;
 
-    //#[tokio::test]
-    //async fn handler_get_packages() {
-    //    let (config, _tmp_dir, app) = test_setup();
-    //    let response = app
-    //        .oneshot(Request::builder().uri("/v1/packages").body(Body::empty()).unwrap())
-    //        .await
-    //        .unwrap();
+    #[tokio::test]
+    async fn handler_get_packages() {
+        let (config, _tmp_dir, app) = test_setup();
 
-    //    assert_eq!(response.status(), StatusCode::OK);
+        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+        let response = app.clone()
+            .oneshot(Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
 
-    //}
+        let response = app
+            .oneshot(Request::builder().uri("/v1/packages/hello%202.10-2%20amd64").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        println!("{:#}",body);
+        let expected_json = json!({
+                "control": {
+                    "architecture": "amd64",
+                    "breaks": "hello-debhelper (<< 2.9)",
+                    "built_using": null,
+                    "conflicts": "hello-traditional",
+                    "depends": "libc6 (>= 2.14)",
+                    "description": "The GNU hello program produces a familiar, friendly greeting.  It\nallows non-programmers to use a classic computer science tool which\nwould otherwise be unavailable to them.\n.\nSeriously, though: this is an example of how to do a Debian package.\nIt is the Debian version of the GNU Project's `hello world' program\n(which is itself an example for the GNU Project).",
+                    "enhances": null,
+                    "essential": null,
+                    "homepage": "http://www.gnu.org/software/hello/",
+                    "installed_size": "280",
+                    "maintainer": "Santiago Vila <sanvila@debian.org>",
+                    "package": "hello",
+                    "pre_depends": null,
+                    "priority": "optional",
+                    "provides": null,
+                    "recommends": null,
+                    "replaces": "hello-debhelper (<< 2.9), hello-traditional",
+                    "section": "devel",
+                    "source": null,
+                    "suggests": null,
+                    "version": "2.10-2"
+                },
+              "description_md5": null,
+              "filename": format!("{}/h/hello_2.10-2_amd64.deb", config.pool_dir),
+              "key": "hello 2.10-2 amd64",
+              "md5sum": "52b0cad2e741dd722c3e2e16a0aae57e",
+              "sha1": "9942852719b998fb190848966bcbe13f10534842",
+              "sha256": "35b1508eeee9c1dfba798c4c04304ef0f266990f936a51f165571edf53325cbc",
+              "size": 56132
+        });
+        assert_eq!(body, expected_json);
+    }
     #[tokio::test]
     async fn handler_upload_package() {
         let (config, _tmp_dir, app) = test_setup();

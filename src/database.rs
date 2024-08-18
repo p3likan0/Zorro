@@ -69,12 +69,13 @@ pub fn insert_debian_binary_package(db_pool: &Pool, pkg: &DebianBinaryPackage) -
     Ok(())
 }
 
-pub fn get_debian_binary_package(conn: &Connection, key: &str) -> Result<DebianBinaryPackage> {
+pub fn get_debian_binary_package(db_pool: &Pool, key: &str) -> io::Result<DebianBinaryPackage> {
+    let conn = db_pool.get().map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
     let mut stmt = conn.prepare(
         "SELECT key, filename, size, md5sum, sha1, sha256, description_md5, package, source, version, section, priority, architecture, essential, depends, recommends, suggests, enhances, pre_depends, breaks, conflicts, provides, replaces, installed_size, maintainer, description, homepage, built_using
         FROM debian_binary_package
         WHERE key = ?1"
-    )?;
+    ).map_err(|err|{Error::new(Other, format!("Could not prepare query, error: {}",err))})?; 
     let pkg = stmt.query_row(params![key], |row| {
         Ok(DebianBinaryPackage {
             key: row.get(0)?,
@@ -108,7 +109,7 @@ pub fn get_debian_binary_package(conn: &Connection, key: &str) -> Result<DebianB
                 built_using: row.get(27)?
             }
         })
-    })?;
+    }).map_err(|err|{Error::new(Other, format!("Could not get package with key: {}, error: {}", key, err))})?; 
     Ok(pkg)
 }
 
