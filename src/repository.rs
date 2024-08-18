@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::collections::HashMap;
 use std::fs::read_to_string;
+use std::io::Write;
+
 
 use axum::{
     response::Json,
@@ -50,11 +52,18 @@ pub struct Distribution {
 }
 
 impl RepositoryConfig{
-    fn new(config_path: &str) -> io::Result<RepositoryConfig> {
+    pub fn new(config_path: &str) -> io::Result<RepositoryConfig> {
         let yaml_content = read_to_string(config_path)?;
         let archive: RepositoryConfig = serde_yaml::from_str(&yaml_content)
             .map_err(|err| {Error::new(InvalidData, format!("Could not decode yaml config: {}, error: {}", config_path, err))})?;
         Ok(archive)
+    }
+
+    pub fn write_to_file(&self, path: &std::path::Path) -> io::Result<()> {
+        let serialized = serde_yaml::to_string(&self)
+            .map_err(|err| {Error::new(InvalidData, format!("Could not Serialize config, error: {}", err))})?;
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(serialized.as_bytes())
     }
 }
 
