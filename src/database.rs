@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, Result};
 
 use crate::packages::binary_package::{DebianBinaryPackage, DebianBinaryControl}; 
-use crate::repository::Distribution;
+use crate::repository::{Distribution, PublishedDistribution};
 use r2d2_sqlite::SqliteConnectionManager;
 use std::collections::HashMap;
 //use rusqlite::Result;
@@ -78,7 +78,7 @@ pub fn insert_distributions(db_pool: &Pool, dists: &HashMap<String, Distribution
         for component in &dist.components {
             for architecture in &dist.architectures {
                 conn.execute(
-                    "INSERT INTO distributions (name, origin, label, version, codename, description, component, architecture)
+                    "INSERT OR REPLACE INTO distributions (name, origin, label, version, codename, description, component, architecture)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     params![
                         name,
@@ -97,6 +97,31 @@ pub fn insert_distributions(db_pool: &Pool, dists: &HashMap<String, Distribution
     Ok(())
 }
 
+pub fn get_published_distributions(db_pool: &Pool) -> io::Result<Vec<PublishedDistribution>> {
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    let mut stmt = conn.prepare(
+        "SELECT name, origin, label, version, codename, description, component, architecture FROM distributions"
+    ).map_err(|err|{Error::new(Other, format!("Could not prepare query for published distributions, error: {}",err))})?;
+    let distribution_iter = stmt.query_map([], |row| {
+        Ok(PublishedDistribution {
+            name: row.get(0)?,
+            origin: row.get(1)?,
+            label: row.get(2)?,
+            version: row.get(3)?,
+            codename: row.get(4)?,
+            description: row.get(5)?,
+            component: row.get(6)?,
+            architecture: row.get(7)?,
+        })
+    }).map_err(|err|{Error::new(Other, format!("Could not get published distributions, error: {}",err))})?;
+    let mut distributions = Vec::new();
+    for dist in distribution_iter {
+        distributions.push(dist.map_err(|err|{Error::new(Other, format!("Could not map published distribution, error: {}",err))})?);
+    }
+
+    Ok(distributions)
+}
 pub fn insert_debian_binary_package(db_pool: &Pool, pkg: &DebianBinaryPackage) -> io::Result<()> {
     let conn = db_pool.get().map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
     conn.execute(

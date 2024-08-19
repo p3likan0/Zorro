@@ -14,6 +14,8 @@ use std::{io, io::{Error, ErrorKind::{Other, InvalidInput}}};
 use crate::repository::{Repository, RepositoryConfig};
 use std::sync::Arc;
 
+use serde_json::json;
+use serde::Deserialize;
 pub mod binary_package;
 mod hash_utils;
 
@@ -91,9 +93,6 @@ where
     .await
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
 }
-
-use serde_json::json;
-use serde::Deserialize;
 
 
 #[derive(Deserialize)]

@@ -48,7 +48,8 @@ fn app(config_path: &str) -> Router {
     Router::new()
         .route("/v1/packages", get(packages::handle_get_package_name_version_arch))
         .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
-        .route("/v1/repositories", get(repository::handle_get_repositories))
+        .route("/v1/repositories", get(repository::handle_get_repository_config))
+        .route("/v1/distributions", get(repository::handle_get_published_distributions))
         .with_state(shared_archive)
 }
 
@@ -65,6 +66,22 @@ mod tests {
     use serde_json::{json, Value};
     use tempdir::TempDir;
 
+    fn sort_json(json: &mut Value) {
+        match json {
+            Value::Object(obj) => {
+                for value in obj.values_mut() {
+                    sort_json(value);
+                }
+            },
+            Value::Array(arr) => {
+                arr.sort_unstable_by(|a, b| a.to_string().cmp(&b.to_string()));
+                for value in arr.iter_mut() {
+                    sort_json(value);
+                }
+            },
+            _ => {}
+        }
+    }
     #[tokio::test]
     async fn handler_get_packages() {
         let (config, _tmp_dir, app) = test_setup();
@@ -223,6 +240,145 @@ mod tests {
               }
             }
         });
+        assert_eq!(body, expected_json);
+    }
+    #[tokio::test]
+    async fn handler_get_published_distributions() {
+        let (config, _tmp_dir, app) = test_setup();
+        
+        let response = app
+            .oneshot(Request::builder().uri("/v1/distributions").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let mut body: Value = serde_json::from_slice(&body).unwrap();
+        println!("{:#}", body);
+        let mut expected_json = json!([
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "main",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "main",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "contrib",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "contrib",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "testing",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "testing",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "stable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "main",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "main",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "contrib",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "contrib",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "arm64",
+                "codename": "codename",
+                "component": "testing",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            },
+            {
+                "architecture": "amd64",
+                "codename": "codename",
+                "component": "testing",
+                "description": "this is a distribution description",
+                "label": "label",
+                "name": "unstable",
+                "origin": "origin",
+                "version": "version"
+            }
+        ]);
+        sort_json(&mut body);
+        sort_json(&mut expected_json);
         assert_eq!(body, expected_json);
     }
 }
