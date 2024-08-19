@@ -40,6 +40,7 @@ fn app(config_path: &str) -> Router {
     }
 
     database::create_tables(&archive.db_conn).unwrap();
+    database::insert_distributions(&archive.db_conn, &archive.config.dists).unwrap();
     packages::create_directories(&archive.config).expect("Could not create uploads directory"); // Not tested yet
 
     let shared_archive = Arc::new(archive); 

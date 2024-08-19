@@ -1,8 +1,9 @@
 use rusqlite::{params, Connection, Result};
 
 use crate::packages::binary_package::{DebianBinaryPackage, DebianBinaryControl}; 
-
+use crate::repository::Distribution;
 use r2d2_sqlite::SqliteConnectionManager;
+use std::collections::HashMap;
 //use rusqlite::Result;
 
 use std::{io, io::Error, io::ErrorKind::{Other}};
@@ -16,7 +17,20 @@ pub fn init_db_pool_connection(db_path: &str) -> io::Result<Pool> {
 
 pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
     let table_creations = vec![
+        "CREATE TABLE IF NOT EXISTS distributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            label TEXT NOT NULL,
+            version TEXT NOT NULL,
+            codename TEXT NOT NULL,
+            description TEXT NOT NULL,
+            component TEXT NOT NULL,
+            architecture TEXT NOT NULL,
+            UNIQUE(name, component, architecture)
+        )",
         "CREATE TABLE IF NOT EXISTS debian_binary_package (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT NOT NULL,
             size INTEGER NOT NULL,
             md5sum TEXT NOT NULL,
@@ -44,7 +58,7 @@ pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
             description TEXT NOT NULL,
             homepage TEXT,
             built_using TEXT,
-            PRIMARY KEY (package, version, architecture)
+            UNIQUE (package, version, architecture)
         )",
     ];
 
@@ -52,7 +66,33 @@ pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
         .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
     for sql in table_creations {
         conn.execute(sql, [])
-            .map_err(|err|{Error::new(Other, format!("Could not insert in db, error: {}",err))})?;
+            .map_err(|err|{Error::new(Other, format!("Could not insert initial tables in db, error: {}",err))})?;
+    }
+    Ok(())
+}
+
+pub fn insert_distributions(db_pool: &Pool, dists: &HashMap<String, Distribution>) -> io::Result<()> {
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    for (name, dist) in dists {
+        for component in &dist.components {
+            for architecture in &dist.architectures {
+                conn.execute(
+                    "INSERT INTO distributions (name, origin, label, version, codename, description, component, architecture)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        name,
+                        dist.origin,
+                        dist.label,
+                        dist.version,
+                        dist.codename,
+                        dist.description,
+                        component,
+                        architecture,
+                    ],
+                ).map_err(|err|{Error::new(Other, format!("Could not insert dist in db, error: {}",err))})?;
+            }
+        }
     }
     Ok(())
 }

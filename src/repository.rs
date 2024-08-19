@@ -59,6 +59,7 @@ impl RepositoryConfig{
         Ok(archive)
     }
 
+    // Only for testing purposes
     pub fn write_to_file(&self, path: &std::path::Path) -> io::Result<()> {
         let serialized = serde_yaml::to_string(&self)
             .map_err(|err| {Error::new(InvalidData, format!("Could not Serialize config, error: {}", err))})?;
