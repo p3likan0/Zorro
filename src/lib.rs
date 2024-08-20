@@ -5,6 +5,7 @@ use axum::{
 };
 
 mod repository;
+mod distribution;
 mod packages;
 mod release;
 mod database;
@@ -49,7 +50,8 @@ fn app(config_path: &str) -> Router {
         .route("/v1/packages", get(packages::handle_get_package_name_version_arch))
         .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
         .route("/v1/repositories", get(repository::handle_get_repository_config))
-        .route("/v1/distributions", get(repository::handle_get_published_distributions))
+        .route("/v1/distributions", get(distribution::handle_get_published_distributions))
+        .route("/v1/distribution/add/package", post(distribution::handle_add_package_to_distribution))
         .with_state(shared_archive)
 }
 
@@ -65,6 +67,7 @@ mod tests {
     use http_body_util::BodyExt;
     use serde_json::{json, Value};
     use tempdir::TempDir;
+    use mime::APPLICATION_JSON;
 
     fn sort_json(json: &mut Value) {
         match json {
@@ -83,6 +86,34 @@ mod tests {
         }
     }
     #[tokio::test]
+    async fn handler_post_distribution_publish_package() {
+        let (config, _tmp_dir, app) = test_setup();
+
+        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+        let response = app.clone()
+            .oneshot(Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let json_body = r#"{"package": {"name": "hello", "version": "2.10-2", "architecture": "amd64"},"distribution": {"name": "stable", "component": "main", "architecture": "amd64"}}"#;
+        let response = app
+            .oneshot(Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/v1/distribution/add/package")
+                .header(axum::http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                .body(Body::from(json_body))
+                .unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn handler_get_packages() {
         let (config, _tmp_dir, app) = test_setup();
 
@@ -97,7 +128,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = app
-            .oneshot(Request::builder().uri("/v1/packages?name=hello&version=2.10-2&arch=amd64").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/v1/packages?name=hello&version=2.10-2&architecture=amd64").body(Body::empty()).unwrap())
             .await
             .unwrap();
 

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use axum::{
     extract::{Request, Query},
     body::Bytes,
@@ -15,7 +16,6 @@ use crate::repository::{Repository, RepositoryConfig};
 use std::sync::Arc;
 
 use serde_json::json;
-use serde::Deserialize;
 pub mod binary_package;
 mod hash_utils;
 
@@ -95,18 +95,18 @@ where
 }
 
 
-#[derive(Deserialize)]
-pub struct PackageQuery {
-    name: String,
-    version: String,
-    arch: String,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PackageKey {
+    pub name: String,
+    pub version: String,
+    pub architecture: String,
 }
 
 pub async fn handle_get_package_name_version_arch(
     State(repo): State<Arc<Repository>>,
-    Query(query): Query<PackageQuery>,
+    Query(query): Query<PackageKey>,
 )-> impl IntoResponse {
-    match database::get_debian_binary_package(&repo.db_conn, &query.name, &query.version, &query.arch){
+    match database::get_debian_binary_package(&repo.db_conn, &query.name, &query.version, &query.architecture){
         Ok(package) => (StatusCode::OK, Json(package)).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
             "error": format!("{}", err)

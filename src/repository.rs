@@ -3,12 +3,10 @@ use serde_yaml;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::io::Write;
-use serde_json::json;
 
 use axum::{
     response::Json,
     response::IntoResponse,
-    http::StatusCode,
     extract::State,
 };
 
@@ -52,19 +50,6 @@ pub struct Distribution {
     pub architectures: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct PublishedDistribution {
-    pub name: String,
-    pub origin: String,
-    pub label: String,
-    pub version: String,
-    pub codename: String,
-    pub description: String,
-    pub component: String,
-    pub architecture: String,
-}
-
-
 impl RepositoryConfig{
     pub fn new(config_path: &str) -> io::Result<RepositoryConfig> {
         let yaml_content = read_to_string(config_path)?;
@@ -84,13 +69,4 @@ impl RepositoryConfig{
 
 pub async fn handle_get_repository_config(State(shared_object): State<Arc<Repository>>) -> impl IntoResponse {
     Json(shared_object.config.clone())
-}
-
-pub async fn handle_get_published_distributions(State(shared_object): State<Arc<Repository>>) -> impl IntoResponse {
-    match database::get_published_distributions(&shared_object.db_conn){
-        Ok(distributions) => (StatusCode::OK, Json(distributions)).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
-            "error": format!("{}", err)
-        }))).into_response()
-    }
 }

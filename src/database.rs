@@ -1,7 +1,9 @@
 use rusqlite::{params, Connection, Result};
 
 use crate::packages::binary_package::{DebianBinaryPackage, DebianBinaryControl}; 
-use crate::repository::{Distribution, PublishedDistribution};
+use crate::packages::PackageKey;
+use crate::repository::{Distribution};
+use crate::distribution::{DistributionKey, PublishedDistribution};
 use r2d2_sqlite::SqliteConnectionManager;
 use std::collections::HashMap;
 //use rusqlite::Result;
@@ -17,6 +19,13 @@ pub fn init_db_pool_connection(db_path: &str) -> io::Result<Pool> {
 
 pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
     let table_creations = vec![
+        "CREATE TABLE IF NOT EXISTS distribution_packages (
+            distribution_id INTEGER NOT NULL,
+            package_id INTEGER NOT NULL,
+            PRIMARY KEY (distribution_id, package_id),
+            FOREIGN KEY (distribution_id) REFERENCES distributions(id) ON DELETE CASCADE,
+            FOREIGN KEY (package_id) REFERENCES debian_binary_package(id) ON DELETE CASCADE
+        )",
         "CREATE TABLE IF NOT EXISTS distributions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -68,6 +77,44 @@ pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
         conn.execute(sql, [])
             .map_err(|err|{Error::new(Other, format!("Could not insert initial tables in db, error: {}",err))})?;
     }
+    Ok(())
+}
+
+pub fn insert_package_to_distribution(db_pool: &Pool, package: &PackageKey, dist: &DistributionKey) -> io::Result<()> {
+    let dist_id = get_distribution_id(&db_pool, dist)?;
+    let pkg_id = get_package_id(&db_pool, package)?;
+    insert_package_id_to_distribution_id(&db_pool, dist_id, pkg_id)
+}
+
+fn get_distribution_id(db_pool: &Pool, dist: &DistributionKey) -> io::Result<i64> {
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    conn.query_row(
+        "SELECT id FROM distributions WHERE name = ? AND component = ? AND architecture = ?",
+        params![dist.name, dist.component, dist.architecture],
+        |row| row.get(0),
+    ).map_err(|err|{Error::new(Other, format!("Could not get distibution id, distribution: {:#?}, error: {}", dist, err))})
+}
+
+fn get_package_id(db_pool: &Pool, package: &PackageKey) -> io::Result<i64> {
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    conn.query_row(
+        "SELECT id FROM debian_binary_package WHERE package = ? AND version = ? AND architecture = ?",
+        params![package.name, package.version, package.architecture],
+        |row| row.get(0),
+    ).map_err(|err|{Error::new(Other, format!("Could not get package id, package: {:#?}, error: {}", package, err))})
+}
+
+// The idea here is to add the functions as private to this mod and abstract the user from doing
+// the queries to get the required ids here.
+fn insert_package_id_to_distribution_id(db_pool: &Pool, distribution_id: i64, package_id: i64) -> io::Result<()> {
+    let conn = db_pool.get()
+        .map_err(|err|{Error::new(Other, format!("Could not aquire db_pool, error: {}",err))})?; 
+    conn.execute(
+        "INSERT INTO distribution_packages (distribution_id, package_id) VALUES (?1, ?2)",
+        params![distribution_id, package_id],
+    ).map_err(|err|{Error::new(Other, format!("Could not insert package:{} to Distribution{}:, error: {}", package_id, distribution_id, err))})?;
     Ok(())
 }
 
