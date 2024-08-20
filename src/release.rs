@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Write, Result as IoResult};
+use std::io::{Result as IoResult, Write};
 
 #[derive(Debug, Clone)]
 pub struct DebianRelease {
-    pub suite: String, 
+    pub suite: String,
     pub components: Vec<String>,
     pub version: String,
     pub origin: String,
@@ -31,8 +31,16 @@ impl DateTimeProvider for RealDateTimeProvider {
 }
 
 impl DebianRelease {
-    pub fn new(suite: String, components: Vec<String>, version: String, origin: String, label: String, 
-               architectures: Vec<String>, description: String, codename: String) -> Self {
+    pub fn new(
+        suite: String,
+        components: Vec<String>,
+        version: String,
+        origin: String,
+        label: String,
+        architectures: Vec<String>,
+        description: String,
+        codename: String,
+    ) -> Self {
         DebianRelease {
             suite,
             components,
@@ -47,7 +55,7 @@ impl DebianRelease {
             checksums_sha256: HashMap::new(),
         }
     }
-    
+
     fn generate_release_file_contents<T: DateTimeProvider>(&self, time_provider: &T) -> String {
         let mut contents = format!(
             "Origin: {}\nLabel: {}\nSuite: {}\nVersion: {}\nCodename: {}\nDate: {}\nArchitectures: {}\nComponents: {}\nDescription: {}\n",
@@ -80,11 +88,18 @@ impl DebianRelease {
         self.save_release_to_file(path, &time_provider)
     }
 
-    fn save_release_to_file<T: DateTimeProvider>(&self, path: &str, time_provider: &T) -> IoResult<()> {
-        let full_path = format!("{}/{}",path,self.suite).to_string();
+    fn save_release_to_file<T: DateTimeProvider>(
+        &self,
+        path: &str,
+        time_provider: &T,
+    ) -> IoResult<()> {
+        let full_path = format!("{}/{}", path, self.suite).to_string();
         fs::create_dir_all(&full_path)?;
-        let mut file = fs::File::create(format!("{}/Release",full_path))?;
-        file.write_all(self.generate_release_file_contents(time_provider).as_bytes())
+        let mut file = fs::File::create(format!("{}/Release", full_path))?;
+        file.write_all(
+            self.generate_release_file_contents(time_provider)
+                .as_bytes(),
+        )
     }
 }
 
@@ -105,21 +120,27 @@ mod tests {
     fn create_release_file() {
         let release = DebianRelease::new(
             "experimental".to_string(),
-            vec!["main".to_string(),"contrib".to_string(),"ble".to_string()],
+            vec!["main".to_string(), "contrib".to_string(), "ble".to_string()],
             "1.2".to_string(),
             "YourCoolCompany".to_string(),
             "YourLabel".to_string(),
             vec!["arm64".to_string(), "riscv".to_string()],
             "This is a very cool repository".to_string(),
-            "buster".to_string()
-            );
+            "buster".to_string(),
+        );
         let tmp_dir = TempDir::new("example").expect("cannot create tempdir");
         let time_provider = MockDateTimeProvider;
-        assert!(release.save_release_to_file(tmp_dir.path().to_str().expect("Failed to convert to &str"), &time_provider).is_ok());
+        assert!(release
+            .save_release_to_file(
+                tmp_dir.path().to_str().expect("Failed to convert to &str"),
+                &time_provider
+            )
+            .is_ok());
         let expected_release_path = tmp_dir.path().join("experimental/Release");
         assert!(expected_release_path.exists());
 
-        let file_contents = fs::read_to_string(&expected_release_path).expect("Could not read file");
+        let file_contents =
+            fs::read_to_string(&expected_release_path).expect("Could not read file");
         let expected_contents = r#"Origin: YourCoolCompany
 Label: YourLabel
 Suite: experimental

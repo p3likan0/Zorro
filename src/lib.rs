@@ -1,15 +1,10 @@
-use axum::{
-    routing::get,
-    routing::post,
-    Router
-};
+use axum::{routing::get, routing::post, Router};
 
-mod repository;
+mod database;
 mod distribution;
 mod packages;
 mod release;
-mod database;
-
+mod repository;
 
 use std::sync::Arc;
 
@@ -17,9 +12,7 @@ const CONFIG_PATH: &str = ".config/repository_structure.yaml";
 const PUBLISH_PATH: &str = "/tmp/publish";
 
 pub async fn run_server(base_url: &str) {
-    let listener = tokio::net::TcpListener::bind(base_url)
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(base_url).await.unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app(CONFIG_PATH)).await.unwrap();
 }
@@ -36,25 +29,41 @@ fn app(config_path: &str) -> Router {
             distribution.architectures.clone(),
             distribution.description.to_string(),
             distribution.codename.to_string(),
-            );
-        release.save_to_file(PUBLISH_PATH).expect("could not save to file");
+        );
+        release
+            .save_to_file(PUBLISH_PATH)
+            .expect("could not save to file");
     }
 
     database::create_tables(&archive.db_conn).unwrap();
     database::insert_distributions(&archive.db_conn, &archive.config.dists).unwrap();
     packages::create_directories(&archive.config).expect("Could not create uploads directory"); // Not tested yet
 
-    let shared_archive = Arc::new(archive); 
+    let shared_archive = Arc::new(archive);
 
     Router::new()
-        .route("/v1/packages", get(packages::handle_get_package_name_version_arch))
-        .route("/v1/packages/upload/:package_name", post(packages::handle_upload_package))
-        .route("/v1/repositories", get(repository::handle_get_repository_config))
-        .route("/v1/distributions", get(distribution::handle_get_published_distributions))
-        .route("/v1/distribution/add/package", post(distribution::handle_add_package_to_distribution))
+        .route(
+            "/v1/packages",
+            get(packages::handle_get_package_name_version_arch),
+        )
+        .route(
+            "/v1/packages/upload/:package_name",
+            post(packages::handle_upload_package),
+        )
+        .route(
+            "/v1/repositories",
+            get(repository::handle_get_repository_config),
+        )
+        .route(
+            "/v1/distributions",
+            get(distribution::handle_get_published_distributions),
+        )
+        .route(
+            "/v1/distribution/add/package",
+            post(distribution::handle_add_package_to_distribution),
+        )
         .with_state(shared_archive)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -63,11 +72,10 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
-    use tower::{ServiceExt}; // for `call`, `oneshot`, and `ready`
     use http_body_util::BodyExt;
     use serde_json::{json, Value};
     use tempdir::TempDir;
-    use mime::APPLICATION_JSON;
+    use tower::ServiceExt; // for `call`, `oneshot`, and `ready`
 
     fn sort_json(json: &mut Value) {
         match json {
@@ -75,38 +83,48 @@ mod tests {
                 for value in obj.values_mut() {
                     sort_json(value);
                 }
-            },
+            }
             Value::Array(arr) => {
                 arr.sort_unstable_by(|a, b| a.to_string().cmp(&b.to_string()));
                 for value in arr.iter_mut() {
                     sort_json(value);
                 }
-            },
+            }
             _ => {}
         }
     }
     #[tokio::test]
     async fn handler_post_distribution_publish_package() {
-        let (config, _tmp_dir, app) = test_setup();
+        let (_config, _tmp_dir, app) = test_setup();
 
-        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
-        let response = app.clone()
-            .oneshot(Request::builder()
-                .method(axum::http::Method::POST)
-                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
-                .body(Body::from(deb_orig_contents.clone())).unwrap())
+        let deb_orig_contents =
+            std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(axum::http::Method::POST)
+                    .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                    .body(Body::from(deb_orig_contents.clone()))
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let json_body = r#"{"package": {"name": "hello", "version": "2.10-2", "architecture": "amd64"},"distribution": {"name": "stable", "component": "main", "architecture": "amd64"}}"#;
         let response = app
-            .oneshot(Request::builder()
-                .method(axum::http::Method::POST)
-                .uri("/v1/distribution/add/package")
-                .header(axum::http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
-                .body(Body::from(json_body))
-                .unwrap())
+            .oneshot(
+                Request::builder()
+                    .method(axum::http::Method::POST)
+                    .uri("/v1/distribution/add/package")
+                    .header(
+                        axum::http::header::CONTENT_TYPE,
+                        mime::APPLICATION_JSON.as_ref(),
+                    )
+                    .body(Body::from(json_body))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -117,18 +135,28 @@ mod tests {
     async fn handler_get_packages() {
         let (config, _tmp_dir, app) = test_setup();
 
-        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
-        let response = app.clone()
-            .oneshot(Request::builder()
-                .method(axum::http::Method::POST)
-                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
-                .body(Body::from(deb_orig_contents.clone())).unwrap())
+        let deb_orig_contents =
+            std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(axum::http::Method::POST)
+                    .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                    .body(Body::from(deb_orig_contents.clone()))
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = app
-            .oneshot(Request::builder().uri("/v1/packages?name=hello&version=2.10-2&architecture=amd64").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/packages?name=hello&version=2.10-2&architecture=amd64")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -172,18 +200,24 @@ mod tests {
     async fn handler_upload_package() {
         let (config, _tmp_dir, app) = test_setup();
 
-        let deb_orig_contents = std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+        let deb_orig_contents =
+            std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
 
         let response = app
-            .oneshot(Request::builder()
-                .method(axum::http::Method::POST)
-                .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
-                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .oneshot(
+                Request::builder()
+                    .method(axum::http::Method::POST)
+                    .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
+                    .body(Body::from(deb_orig_contents.clone()))
+                    .unwrap(),
+            )
             .await
             .unwrap();
-        let expected_deb = std::path::PathBuf::from(config.pool_dir).join("h/hello_2.10-2_amd64.deb");
+        let expected_deb =
+            std::path::PathBuf::from(config.pool_dir).join("h/hello_2.10-2_amd64.deb");
         assert!(expected_deb.exists());
-        let deb_uploaded_contents = std::fs::read(expected_deb).expect("Failed to read uploaded file");
+        let deb_uploaded_contents =
+            std::fs::read(expected_deb).expect("Failed to read uploaded file");
         assert_eq!(&deb_orig_contents, &deb_uploaded_contents);
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -192,28 +226,51 @@ mod tests {
     async fn handler_upload_library_package() {
         let (config, _tmp_dir, app) = test_setup();
 
-        let deb_orig_contents = std::fs::read("tests/packages/libsqlite0_2.8.17-15+deb10u1_amd64.deb").expect("Failed to test package");
+        let deb_orig_contents =
+            std::fs::read("tests/packages/libsqlite0_2.8.17-15+deb10u1_amd64.deb")
+                .expect("Failed to test package");
 
         let response = app
-            .oneshot(Request::builder()
-                .method(axum::http::Method::POST)
-                .uri("/v1/packages/upload/libsqlite0_2.8.17-15+deb10u1_amd64.deb")
-                .body(Body::from(deb_orig_contents.clone())).unwrap())
+            .oneshot(
+                Request::builder()
+                    .method(axum::http::Method::POST)
+                    .uri("/v1/packages/upload/libsqlite0_2.8.17-15+deb10u1_amd64.deb")
+                    .body(Body::from(deb_orig_contents.clone()))
+                    .unwrap(),
+            )
             .await
             .unwrap();
-        let expected_deb = std::path::PathBuf::from(config.pool_dir).join("lib/s/libsqlite0_2.8.17-15+deb10u1_amd64.deb");
+        let expected_deb = std::path::PathBuf::from(config.pool_dir)
+            .join("lib/s/libsqlite0_2.8.17-15+deb10u1_amd64.deb");
         assert!(expected_deb.exists());
-        let deb_uploaded_contents = std::fs::read(expected_deb).expect("Failed to read uploaded file");
+        let deb_uploaded_contents =
+            std::fs::read(expected_deb).expect("Failed to read uploaded file");
         assert_eq!(&deb_orig_contents, &deb_uploaded_contents);
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    fn test_setup() -> (repository::RepositoryConfig, TempDir, Router){
+    fn test_setup() -> (repository::RepositoryConfig, TempDir, Router) {
         let tmp_dir = TempDir::new("test").unwrap();
-        let mut config = repository::RepositoryConfig::new("tests/repository_structure_1.yml").unwrap();
-        config.db_file = tmp_dir.path().join("test_file.db").into_os_string().into_string().unwrap();
-        config.uploads_dir = tmp_dir.path().join("uploads").into_os_string().into_string().unwrap();
-        config.pool_dir = tmp_dir.path().join("pool").into_os_string().into_string().unwrap();
+        let mut config =
+            repository::RepositoryConfig::new("tests/repository_structure_1.yml").unwrap();
+        config.db_file = tmp_dir
+            .path()
+            .join("test_file.db")
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        config.uploads_dir = tmp_dir
+            .path()
+            .join("uploads")
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        config.pool_dir = tmp_dir
+            .path()
+            .join("pool")
+            .into_os_string()
+            .into_string()
+            .unwrap();
         let config_file = tmp_dir.path().join("config.yml");
         config.write_to_file(&config_file).unwrap();
         let app = app(&config_file.into_os_string().into_string().unwrap());
@@ -222,9 +279,14 @@ mod tests {
     #[tokio::test]
     async fn handler_get_repositories() {
         let (config, _tmp_dir, app) = test_setup();
-        
+
         let response = app
-            .oneshot(Request::builder().uri("/v1/repositories").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/repositories")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -275,10 +337,15 @@ mod tests {
     }
     #[tokio::test]
     async fn handler_get_published_distributions() {
-        let (config, _tmp_dir, app) = test_setup();
-        
+        let (_config, _tmp_dir, app) = test_setup();
+
         let response = app
-            .oneshot(Request::builder().uri("/v1/distributions").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/distributions")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
