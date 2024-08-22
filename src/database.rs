@@ -1,6 +1,6 @@
 use rusqlite::params;
 
-use crate::distribution::{DistributionKey, PublishedDistribution};
+use crate::distribution::{self, DistributionKey, PublishedDistribution};
 use crate::packages::binary_package::{DebianBinaryControl, DebianBinaryPackage};
 use crate::packages::PackageKey;
 use crate::repository::Distribution;
@@ -12,17 +12,31 @@ use std::{io, io::Error, io::ErrorKind::Other};
 
 pub type Pool = r2d2::Pool<SqliteConnectionManager>;
 
-pub fn init_db_pool_connection(db_path: &str) -> io::Result<Pool> {
-    let manager = SqliteConnectionManager::file(db_path);
-    r2d2::Pool::new(manager).map_err(|err| {
-        Error::new(
-            Other,
-            format!("Could not create connection manager, error: {}", err),
-        )
-    })
+#[derive(thiserror::Error, Debug)]
+pub enum DatabaseError {
+    #[error("Could not create connection manager")]
+    CouldNotCreateConnectionManager(r2d2::Error),
+
+    #[error("Could not aquire pool lock")]
+    CouldNotAquirePoolLock(r2d2::Error),
+
+    #[error("Could not perform execute operation")]
+    CouldNotExecute(rusqlite::Error),
+
+    #[error("Error while running query to get distribution:{0}, rusqlite error: {1}")]
+    QueryGetDistributionID(DistributionKey, rusqlite::Error),
+
+    #[error("Error while running query to get package:{0}, rusqlite error: {1}")]
+    QueryGetPackageID(PackageKey, rusqlite::Error),
 }
 
-pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
+pub fn init_db_pool_connection(db_path: &str) -> Result<Pool, DatabaseError> {
+    let manager = SqliteConnectionManager::file(db_path);
+    let pool = r2d2::Pool::new(manager).map_err(DatabaseError::CouldNotCreateConnectionManager)?;
+    Ok(pool)
+}
+
+pub fn create_tables(db_pool: &Pool) -> Result<(), DatabaseError> {
     let table_creations = vec![
         "CREATE TABLE IF NOT EXISTS distribution_packages (
             distribution_id INTEGER NOT NULL,
@@ -78,14 +92,10 @@ pub fn create_tables(db_pool: &Pool) -> io::Result<()> {
 
     let conn = db_pool
         .get()
-        .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
+        .map_err(DatabaseError::CouldNotAquirePoolLock)?;
     for sql in table_creations {
-        conn.execute(sql, []).map_err(|err| {
-            Error::new(
-                Other,
-                format!("Could not insert initial tables in db, error: {}", err),
-            )
-        })?;
+        conn.execute(sql, [])
+            .map_err(DatabaseError::CouldNotExecute)?;
     }
     Ok(())
 }
@@ -94,13 +104,13 @@ pub fn insert_package_to_distribution(
     db_pool: &Pool,
     package: &PackageKey,
     dist: &DistributionKey,
-) -> io::Result<()> {
+) -> Result<(), DatabaseError> {
     let dist_id = get_distribution_id(&db_pool, dist)?;
     let pkg_id = get_package_id(&db_pool, package)?;
     insert_package_id_to_distribution_id(&db_pool, dist_id, pkg_id)
 }
 
-fn get_distribution_id(db_pool: &Pool, dist: &DistributionKey) -> io::Result<i64> {
+fn get_distribution_id(db_pool: &Pool, dist: &DistributionKey) -> Result<i64, DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -109,18 +119,10 @@ fn get_distribution_id(db_pool: &Pool, dist: &DistributionKey) -> io::Result<i64
         params![dist.name, dist.component, dist.architecture],
         |row| row.get(0),
     )
-    .map_err(|err| {
-        Error::new(
-            Other,
-            format!(
-                "Could not get distibution id, distribution: {:#?}, error: {}",
-                dist, err
-            ),
-        )
-    })
+    .map_err(|err| DatabaseError::QueryGetDistributionID(dist.clone(), err))
 }
 
-fn get_package_id(db_pool: &Pool, package: &PackageKey) -> io::Result<i64> {
+fn get_package_id(db_pool: &Pool, package: &PackageKey) -> Result<i64, DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -128,7 +130,7 @@ fn get_package_id(db_pool: &Pool, package: &PackageKey) -> io::Result<i64> {
         "SELECT id FROM debian_binary_package WHERE package = ? AND version = ? AND architecture = ?",
         params![package.name, package.version, package.architecture],
         |row| row.get(0),
-    ).map_err(|err|{Error::new(Other, format!("Could not get package id, package: {:#?}, error: {}", package, err))})
+    ).map_err(|err|{DatabaseError::QueryGetPackageID(package.clone(), err)})
 }
 
 // The idea here is to add the functions as private to this mod and abstract the user from doing
@@ -137,7 +139,7 @@ fn insert_package_id_to_distribution_id(
     db_pool: &Pool,
     distribution_id: i64,
     package_id: i64,
-) -> io::Result<()> {
+) -> Result<(), DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -160,7 +162,7 @@ fn insert_package_id_to_distribution_id(
 pub fn insert_distributions(
     db_pool: &Pool,
     dists: &HashMap<String, Distribution>,
-) -> io::Result<()> {
+) -> Result<(), DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -187,7 +189,9 @@ pub fn insert_distributions(
     Ok(())
 }
 
-pub fn get_published_distributions(db_pool: &Pool) -> io::Result<Vec<PublishedDistribution>> {
+pub fn get_published_distributions(
+    db_pool: &Pool,
+) -> Result<Vec<PublishedDistribution>, DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -225,7 +229,10 @@ pub fn get_published_distributions(db_pool: &Pool) -> io::Result<Vec<PublishedDi
 
     Ok(distributions)
 }
-pub fn insert_debian_binary_package(db_pool: &Pool, pkg: &DebianBinaryPackage) -> io::Result<()> {
+pub fn insert_debian_binary_package(
+    db_pool: &Pool,
+    pkg: &DebianBinaryPackage,
+) -> Result<(), DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;
@@ -250,7 +257,7 @@ pub fn get_debian_binary_package(
     package_name: &str,
     package_version: &str,
     package_arch: &str,
-) -> io::Result<DebianBinaryPackage> {
+) -> Result<DebianBinaryPackage, DatabaseError> {
     let conn = db_pool
         .get()
         .map_err(|err| Error::new(Other, format!("Could not aquire db_pool, error: {}", err)))?;

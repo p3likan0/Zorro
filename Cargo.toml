@@ -15,12 +15,12 @@ path = "src/lib.rs"
 
 [dependencies]
 axum = "0.7.5"
-tokio = { version = "1", features = ["full"] }
-serde_json = "1"
-serde = { version = "1", features = ["derive"] }
+tokio = { version = "1.39.3", features = ["full"] }
+serde_json = "1.0.125"
+serde = { version = "1.0.208", features = ["derive"] }
 futures = "0.3"
 tokio-util = { version = "0", features = ["full"] }
-serde_yaml = "0"
+serde_yaml = "0.9.33"
 chrono = "0.4"
 debpkg = "0"
 rusqlite = { version = "0.32.0", features = ["bundled"] }
@@ -31,8 +31,11 @@ digest = "0.10"
 hex = "0.4"
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
+thiserror = "1.0"
+derive_more = "0.99.18"
 
 [dev-dependencies]
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5.0", features = ["util"] }
 http-body-util = "0"
 tempdir = "0"
+mime = "0"

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use serde_json::json;
 pub mod binary_package;
 mod hash_utils;
+use derive_more::Display;
 
 use crate::database;
 
@@ -95,7 +96,8 @@ where
 }
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Display, Clone)]
+#[display(fmt = "DistributionKey: name = {}, version = {}, architecture: {}", name, version, architecture)]
 pub struct PackageKey {
     pub name: String,
     pub version: String,

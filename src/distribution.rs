@@ -6,6 +6,7 @@ use serde_json::json;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, response::Json};
 use std::sync::Arc;
+use derive_more::Display;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PublishedDistribution {
@@ -34,7 +35,8 @@ pub async fn handle_get_published_distributions(
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Display, Clone)]
+#[display(fmt = "DistributionKey: name = {}, component = {}, architecture: {}", name, component, architecture)]
 pub struct DistributionKey {
     pub name: String,
     pub component: String,
