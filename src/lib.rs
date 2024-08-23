@@ -59,8 +59,12 @@ fn app(config_path: &str) -> Router {
             get(distribution::handle_get_published_distributions),
         )
         .route(
-            "/v1/distribution/add/package",
+            "/v1/distribution/package",
             post(distribution::handle_add_package_to_distribution),
+        )
+        .route(
+            "/v1/distribution/packages",
+            get(distribution::handle_get_packages_in_distribution),
         )
         .with_state(shared_archive)
 }
@@ -93,10 +97,8 @@ mod tests {
             _ => {}
         }
     }
-    #[tokio::test]
-    async fn handler_post_distribution_publish_package() {
-        let (_config, _tmp_dir, app) = test_setup();
 
+    async fn add_hello_package_to_pool(app: Router){
         let deb_orig_contents =
             std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
         let response = app
@@ -111,13 +113,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
 
-        let json_body = r#"{"package": {"name": "hello", "version": "2.10-2", "architecture": "amd64"},"distribution": {"name": "stable", "component": "main", "architecture": "amd64"}}"#;
+    async fn add_libsql_to_stable_main_amd64_distribution(app: Router){
+        let json_body = r#"{"package": {"name": "libsqlite0", "version": "2.8.17-15+deb10u1", "architecture": "amd64"},"distribution": {"name": "stable", "component": "main", "architecture": "amd64"}}"#.to_string();
+        add_to_distribution(app, json_body).await;
+    }
+
+    async fn add_hello_to_stable_main_amd64_distribution(app: Router){
+        let json_body = r#"{"package": {"name": "hello", "version": "2.10-2", "architecture": "amd64"},"distribution": {"name": "stable", "component": "main", "architecture": "amd64"}}"#.to_string();
+        add_to_distribution(app, json_body).await;
+    }    
+
+    async fn add_to_distribution(app: Router, json_body: String){
         let response = app
             .oneshot(
                 Request::builder()
                     .method(axum::http::Method::POST)
-                    .uri("/v1/distribution/add/package")
+                    .uri("/v1/distribution/package")
                     .header(
                         axum::http::header::CONTENT_TYPE,
                         mime::APPLICATION_JSON.as_ref(),
@@ -130,25 +143,59 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
     }
-
-    #[tokio::test]
-    async fn handler_get_packages() {
-        let (config, _tmp_dir, app) = test_setup();
-
-        let deb_orig_contents =
-            std::fs::read("tests/packages/hello_2.10-2_amd64.deb").expect("Failed to test package");
+    async fn get_packages_in_stable_main_amd64_distribution(app: Router) -> Value {
         let response = app
-            .clone()
             .oneshot(
                 Request::builder()
-                    .method(axum::http::Method::POST)
-                    .uri("/v1/packages/upload/hello_2.10-2_amd64.deb")
-                    .body(Body::from(deb_orig_contents.clone()))
+                    .uri("/v1/distribution/packages?name=stable&component=main&architecture=amd64")
+                    .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
+
         assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        body
+    }
+
+    #[tokio::test]
+    async fn handler_get_packages_in_distribution() {
+        let (_config, _tmp_dir, app) = test_setup();
+        add_hello_package_to_pool(app.clone()).await;
+        upload_libsqlite_to_pool(app.clone()).await;
+        add_hello_to_stable_main_amd64_distribution(app.clone()).await;
+        add_libsql_to_stable_main_amd64_distribution(app.clone()).await;
+        let body = get_packages_in_stable_main_amd64_distribution(app.clone()).await;  
+
+        let expected_json = json!([
+            {
+                "architecture": "amd64",
+                "name": "hello",
+                "version": "2.10-2",
+            },
+            {
+                "architecture": "amd64",
+                "name": "libsqlite0",
+                "version": "2.8.17-15+deb10u1",
+            }
+ 
+        ]);
+        assert_eq!(body, expected_json);
+    }
+
+    #[tokio::test]
+    async fn handler_post_distribution_package() {
+        let (_config, _tmp_dir, app) = test_setup();
+        add_hello_package_to_pool(app.clone()).await;
+        add_hello_to_stable_main_amd64_distribution(app.clone()).await;
+    }
+
+    #[tokio::test]
+    async fn handler_get_packages() {
+        let (config, _tmp_dir, app) = test_setup();
+        add_hello_package_to_pool(app.clone()).await;
 
         let response = app
             .oneshot(
@@ -222,10 +269,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[tokio::test]
-    async fn handler_upload_library_package() {
-        let (config, _tmp_dir, app) = test_setup();
-
+    async fn upload_libsqlite_to_pool(app: Router) -> (Vec<u8>, axum::response::Response<Body>) {
         let deb_orig_contents =
             std::fs::read("tests/packages/libsqlite0_2.8.17-15+deb10u1_amd64.deb")
                 .expect("Failed to test package");
@@ -240,6 +284,14 @@ mod tests {
             )
             .await
             .unwrap();
+        (deb_orig_contents, response)
+    }
+
+    #[tokio::test]
+    async fn handler_upload_library_package() {
+        let (config, _tmp_dir, app) = test_setup();
+        let (deb_orig_contents, response) = upload_libsqlite_to_pool(app.clone()).await;
+
         let expected_deb = std::path::PathBuf::from(config.pool_dir)
             .join("lib/s/libsqlite0_2.8.17-15+deb10u1_amd64.deb");
         assert!(expected_deb.exists());

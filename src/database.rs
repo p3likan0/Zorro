@@ -49,8 +49,17 @@ pub enum DatabaseError {
     #[error("Could not to insert distribution: {0},{1}, rusqlite error: {2}")]
     CouldNotInsertDistribution(String, Distribution, rusqlite::Error),
 
+    #[error("Could not prepare query to get binary packages_id in distribution_id:{0}, rusqlite error: {1}")]
+    CouldNotPrepareQueryGetPackagesIDinDistributionID(i64, rusqlite::Error),
+
+    #[error("Could not get packages_id in distribution_id:{0}, rusqlite error:{1}")]
+    CouldNotGetPackagesIDinDistrbutionID(i64, rusqlite::Error),
+
     #[error("Could not to insert debian binary package: {0},rusqlite error: {1}")]
     CouldNotInsertDebianBinaryPackage(DebianBinaryPackage, rusqlite::Error),
+
+    #[error("Could not get packagekey from package id: {0},rusqlite error: {1}")]
+    CouldNotGetPackageKeyFromPackageID(i64, rusqlite::Error),
 }
 
 use DatabaseError::*;
@@ -165,6 +174,44 @@ fn insert_package_id_to_distribution_id(
     )
     .map_err(|err| InsertPackageIDToDistributionID(distribution_id, package_id, err))?;
     Ok(())
+}
+
+fn get_packagekey_from_package_id(db_pool: &Pool, package_id: i64) -> Result<PackageKey, DatabaseError> {
+    let conn = db_pool.get().map_err(CouldNotAquirePoolLock)?;
+    let pkg = conn.query_row(
+        "SELECT package, version, architecture FROM debian_binary_package WHERE id = ?",
+        params![package_id],
+        |row| {
+            Ok(PackageKey{
+                name: row.get(0)?,
+                version: row.get(1)?,
+                architecture: row.get(2)?
+            })
+        }
+    ).map_err(|err|{CouldNotGetPackageKeyFromPackageID(package_id, err)})?;
+    Ok(pkg)
+}
+
+pub fn get_packages_in_distribution(db_pool: &Pool, dist: &DistributionKey) -> Result<Vec<PackageKey>, DatabaseError> {
+    let dist_id = get_distribution_id(db_pool, dist)?;
+    let pkgs_id = get_package_ids_for_distribution_id(db_pool, dist_id)?;
+    let mut packages = Vec::new();
+    for pkg in pkgs_id{
+        packages.push(get_packagekey_from_package_id(db_pool, pkg)?);
+    }
+    Ok(packages)
+}
+
+fn get_package_ids_for_distribution_id(db_pool: &Pool, distribution_id: i64) -> Result<Vec<i64>, DatabaseError> {
+    let conn = db_pool.get().map_err(CouldNotAquirePoolLock)?;
+    let mut stmt = conn.prepare(
+        "SELECT package_id FROM distribution_packages WHERE distribution_id = ?"
+    ).map_err(|err|{CouldNotPrepareQueryGetPackagesIDinDistributionID(distribution_id, err)})?;
+
+    let package_ids = stmt.query_map(params![distribution_id], |row| row.get(0)).map_err(|err| {CouldNotGetPackagesIDinDistrbutionID(distribution_id, err)})?
+        .collect::<Result<Vec<i64>, rusqlite::Error>>().unwrap();
+
+    Ok(package_ids)
 }
 
 pub fn insert_distributions(
