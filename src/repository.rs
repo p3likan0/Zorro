@@ -9,6 +9,21 @@ use axum::{extract::State, response::IntoResponse, response::Json};
 use crate::database;
 use std::sync::Arc;
 use std::{io, io::Error, io::ErrorKind::InvalidData};
+use derive_more::Display;
+
+#[derive(thiserror::Error, Debug)]
+pub enum RepositoryError {
+    #[error("Could not create repository, database error:{0}")]
+    CouldNotCreateRepository(#[from] database::DatabaseError),
+
+    #[error("Could not read configuration:{0}, io::error:{1}")]
+    CouldNotReadConfiguration(String, io::Error),
+
+    #[error("Could not decode configuration:{0}, io::error:{1}")]
+    CouldNotDecodeConfiguration(String, serde_yaml::Error)
+}
+
+use RepositoryError::{CouldNotReadConfiguration, CouldNotDecodeConfiguration};
 
 #[derive(Debug, Clone)]
 pub struct Repository {
@@ -17,7 +32,7 @@ pub struct Repository {
 }
 
 impl Repository {
-    pub fn new(config_path: &str) -> io::Result<Repository> {
+    pub fn new(config_path: &str) -> Result<Repository, RepositoryError> {
         let config = RepositoryConfig::new(&config_path)?;
         let db_conn = database::init_db_pool_connection(&config.db_file)?;
         Ok(Repository { config, db_conn })
@@ -32,7 +47,8 @@ pub struct RepositoryConfig {
     pub dists: HashMap<String, Distribution>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Display)]
+#[display(fmt = "Distribution: {:#?}", self)]
 pub struct Distribution {
     pub origin: String,
     pub label: String,
@@ -44,16 +60,10 @@ pub struct Distribution {
 }
 
 impl RepositoryConfig {
-    pub fn new(config_path: &str) -> io::Result<RepositoryConfig> {
-        let yaml_content = read_to_string(config_path)?;
+    pub fn new(config_path: &str) -> Result<RepositoryConfig, RepositoryError> {
+        let yaml_content = read_to_string(config_path).map_err(|err| {CouldNotReadConfiguration(config_path.to_string(), err)})?;
         let archive: RepositoryConfig = serde_yaml::from_str(&yaml_content).map_err(|err| {
-            Error::new(
-                InvalidData,
-                format!(
-                    "Could not decode yaml config: {}, error: {}",
-                    config_path, err
-                ),
-            )
+            CouldNotDecodeConfiguration(config_path.to_string(), err)
         })?;
         Ok(archive)
     }

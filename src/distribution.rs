@@ -36,7 +36,7 @@ pub async fn handle_get_published_distributions(
 }
 
 #[derive(Debug, Deserialize, Serialize, Display, Clone)]
-#[display(fmt = "DistributionKey: name = {}, component = {}, architecture: {}", name, component, architecture)]
+#[display(fmt = "DistributionKey: {}", self)]
 pub struct DistributionKey {
     pub name: String,
     pub component: String,

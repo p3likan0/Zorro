@@ -1,19 +1,25 @@
-use serde::{Deserialize, Serialize};
+use crate::repository::{Repository, RepositoryConfig};
 use axum::{
-    extract::{Request, Query},
     body::Bytes,
-    http::StatusCode,
-    response::{Json, IntoResponse},
     extract::State,
+    extract::{Query, Request},
+    http::StatusCode,
+    response::{IntoResponse, Json},
     BoxError,
 };
-use std::{path, path::PathBuf};
 use futures::{Stream, TryStreamExt};
-use tokio_util::io::StreamReader;
-use tokio::{io::BufWriter};
-use std::{io, io::{Error, ErrorKind::{Other, InvalidInput}}};
-use crate::repository::{Repository, RepositoryConfig};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::{
+    io,
+    io::{
+        Error,
+        ErrorKind::{InvalidInput, Other},
+    },
+};
+use std::{path, path::PathBuf};
+use tokio::io::BufWriter;
+use tokio_util::io::StreamReader;
 
 use serde_json::json;
 pub mod binary_package;
@@ -23,7 +29,10 @@ use derive_more::Display;
 use crate::database;
 
 pub fn create_directories(config: &RepositoryConfig) -> io::Result<()> {
-    println!("Creating directories: {}, {}", &config.uploads_dir, &config.pool_dir);
+    println!(
+        "Creating directories: {}, {}",
+        &config.uploads_dir, &config.pool_dir
+    );
     let uploads_dir = path::Path::new(&config.uploads_dir);
     let pool_dir = path::Path::new(&config.pool_dir);
     std::fs::create_dir_all(uploads_dir)?;
@@ -35,11 +44,10 @@ pub async fn handle_upload_package(
     axum::extract::Path(package_name): axum::extract::Path<String>,
     request: Request,
 ) -> Result<(), (StatusCode, String)> {
-    validate_upload_package_name(&package_name).
-        map_err(|err| {
-            eprintln!("Error: {}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        })?;
+    validate_upload_package_name(&package_name).map_err(|err| {
+        eprintln!("Error: {}", err);
+        (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+    })?;
 
     // Stream to file
     let path = std::path::Path::new(&repo.config.uploads_dir).join(&package_name);
@@ -48,7 +56,10 @@ pub async fn handle_upload_package(
     binary_package::DebianBinaryPackage::process(&path, &repo.config.pool_dir, &repo.db_conn)
         .map_err(|err| {
             eprintln!("Error: {}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to process debian package".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to process debian package".to_string(),
+            )
         })?;
     Ok(())
 }
@@ -61,12 +72,18 @@ fn validate_upload_package_name(path: &str) -> io::Result<()> {
 
     if let Some(first) = components.peek() {
         if !matches!(first, std::path::Component::Normal(_)) {
-            return Err(Error::new(InvalidInput, "Package name is invalid".to_string()));
+            return Err(Error::new(
+                InvalidInput,
+                "Package name is invalid".to_string(),
+            ));
         }
     }
 
     if components.count() != 1 {
-        return Err(Error::new(InvalidInput, "Package name is invalid".to_string()));
+        return Err(Error::new(
+            InvalidInput,
+            "Package name is invalid".to_string(),
+        ));
         //return Err((StatusCode::INTERNAL_SERVER_ERROR, "Package name is invalid".to_string()));
     }
     Ok(())
@@ -77,7 +94,7 @@ where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
 {
-    println!("receiving: {}",path.display());
+    println!("receiving: {}", path.display());
     async {
         // Convert the stream into an `AsyncRead`.
         let body_with_io_error = stream.map_err(|err| io::Error::new(Other, err));
@@ -95,9 +112,13 @@ where
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
 }
 
-
 #[derive(Debug, Deserialize, Serialize, Display, Clone)]
-#[display(fmt = "DistributionKey: name = {}, version = {}, architecture: {}", name, version, architecture)]
+#[display(
+    fmt = "DistributionKey: name = {}, version = {}, architecture: {}",
+    name,
+    version,
+    architecture
+)]
 pub struct PackageKey {
     pub name: String,
     pub version: String,
@@ -107,11 +128,21 @@ pub struct PackageKey {
 pub async fn handle_get_package_name_version_arch(
     State(repo): State<Arc<Repository>>,
     Query(query): Query<PackageKey>,
-)-> impl IntoResponse {
-    match database::get_debian_binary_package(&repo.db_conn, &query.name, &query.version, &query.architecture){
+) -> impl IntoResponse {
+    // Maybe is better to receive this a json instead of go with query
+    let pkg = PackageKey {
+        name: query.name,
+        version: query.version,
+        architecture: query.architecture,
+    };
+    match database::get_debian_binary_package(&repo.db_conn, &pkg) {
         Ok(package) => (StatusCode::OK, Json(package)).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
-            "error": format!("{}", err)
-        }))).into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": format!("{}", err)
+            })),
+        )
+            .into_response(),
     }
 }

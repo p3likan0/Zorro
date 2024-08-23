@@ -35,7 +35,7 @@ thiserror = "1.0"
 derive_more = "0.99.18"
 
 [dev-dependencies]
-tower = { version = "0.5.0", features = ["util"] }
+tower = { version = "0.4.13", features = ["util"] }
 http-body-util = "0"
 tempdir = "0"
 mime = "0"
